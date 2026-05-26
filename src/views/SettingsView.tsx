@@ -24,6 +24,9 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
   const [inputKey, setInputKey] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState('');
 
   /* ── Word banks ── */
   const { banks, loaded: wbLoaded, loadBanks, addDownloadedBank, removeBank, toggleBank, setBankColor } = useWordbankStore();
@@ -42,15 +45,54 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
 
   /* ── API Key handlers ── */
   const handleSave = async () => {
-    if (!inputKey.trim()) return;
+    const key = inputKey.trim();
+    if (!key) return;
     setSaving(true);
-    await setApiKey(inputKey.trim());
-    setSaving(false);
-    setInputKey('');
+    setSaveError('');
+    try {
+      await setApiKey(key);
+      // Verify it was actually persisted
+      const stored = localStorage.getItem('gk_api_key');
+      if (!stored) throw new Error('localStorage 写入失败，可能是存储空间不足或隐私模式');
+      setInputKey('');
+    } catch (e: any) {
+      setSaveError(e.message || '保存失败');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleClear = () => {
     clearApiKey();
+    setSaveError('');
+    setTestResult('');
+  };
+
+  const handleTestConnection = async () => {
+    const key = apiKey || inputKey.trim();
+    if (!key) {
+      setTestResult('❌ 请先填写并保存 API Key');
+      return;
+    }
+    setTesting(true);
+    setTestResult('测试中…');
+    try {
+      const resp = await fetch('https://api.deepseek.com/v1/models', {
+        headers: { 'Authorization': `Bearer ${key}` },
+      });
+      if (resp.ok) {
+        setTestResult('✅ 连接成功！DeepSeek API 正常');
+      } else if (resp.status === 401) {
+        setTestResult('❌ API Key 无效，请检查是否填写正确');
+      } else {
+        const body = await resp.json().catch(() => ({}));
+        setTestResult(`❌ API 返回错误 ${resp.status}: ${(body as any).error?.message || resp.statusText}`);
+      }
+    } catch (e: any) {
+      setTestResult('❌ 网络连接失败: ' + (e.message || '无法访问 api.deepseek.com'));
+    } finally {
+      setTesting(false);
+    }
   };
 
   /* ── Word bank handlers ── */
@@ -141,6 +183,33 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
             ✅ API Key 已保存（加密存储）
           </div>
         )}
+        {saveError && (
+          <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#c0392b' }}>
+            {saveError}
+          </div>
+        )}
+
+        {/* Test Connection */}
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e8e0d5' }}>
+          <button
+            onClick={handleTestConnection}
+            disabled={testing || (!hasKey && !inputKey.trim())}
+            style={{
+              padding: '6px 16px', border: '1px solid #3498db',
+              borderRadius: 6, background: '#fff',
+              color: testing ? '#8b7e6a' : '#3498db',
+              cursor: (testing || (!hasKey && !inputKey.trim())) ? 'default' : 'pointer',
+              fontSize: '0.8rem',
+            }}
+          >
+            {testing ? '测试中…' : '🔗 测试连接'}
+          </button>
+          {testResult && (
+            <div style={{ marginTop: 6, fontSize: '0.8rem', color: testResult.startsWith('✅') ? '#27ae60' : '#c0392b' }}>
+              {testResult}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ═══════ 词库管理 ═══════ */}

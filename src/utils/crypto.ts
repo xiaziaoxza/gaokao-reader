@@ -3,6 +3,17 @@
 // available in all Android WebView environments
 const STORAGE_KEY = 'gk_api_key';
 
+function isLocalStorageAvailable(): boolean {
+  try {
+    const test = '__ls_test__';
+    localStorage.setItem(test, test);
+    localStorage.removeItem(test);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Simple XOR obfuscation with device-derived key
 function obfuscate(text: string): string {
   const seed = (navigator.userAgent || 'gaokao').length + screen.width;
@@ -24,8 +35,19 @@ function deobfuscate(encoded: string): string {
 }
 
 export async function encryptApiKey(plaintext: string): Promise<string> {
+  if (!isLocalStorageAvailable()) {
+    throw new Error('本地存储不可用，请检查是否开启了隐私模式');
+  }
   const result = obfuscate(plaintext);
-  localStorage.setItem(STORAGE_KEY, result);
+  try {
+    localStorage.setItem(STORAGE_KEY, result);
+  } catch (e: any) {
+    throw new Error('存储空间不足: ' + (e.message || ''));
+  }
+  // Read-back verification
+  if (localStorage.getItem(STORAGE_KEY) !== result) {
+    throw new Error('存储验证失败，请重试');
+  }
   return result;
 }
 
