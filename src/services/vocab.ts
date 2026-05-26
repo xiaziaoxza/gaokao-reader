@@ -43,8 +43,11 @@ export function matchVocab(
 
   // Find all matches in the article
   const matches: MatchedWord[] = [];
-  // Escape regex special chars and sort by length descending (longest match first)
-  const allWords = [...vocabMap.keys()].sort((a, b) => b.length - a.length);
+  // Filter: exclude single-character words (e.g., "a", "I") which cause
+  // massive false positives since \b(a)\b matches every article in English
+  const allWords = [...vocabMap.keys()]
+    .filter(w => w.length >= 2)
+    .sort((a, b) => b.length - a.length);
 
   if (allWords.length === 0) return matches;
 

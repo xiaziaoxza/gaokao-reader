@@ -5,6 +5,7 @@ import { SettingsView } from './views/SettingsView';
 import { ArticleHistoryView } from './views/ArticleHistoryView';
 import { useSettingsStore } from './stores/settingsStore';
 import { useArticleHistoryStore } from './stores/articleHistoryStore';
+import { useWordbankStore } from './stores/wordbankStore';
 
 type View = 'chat' | 'reader' | 'history' | 'settings';
 
@@ -14,10 +15,12 @@ const App: React.FC = () => {
   const [view, setView] = useState<View>('chat');
   const loadApiKey = useSettingsStore(s => s.loadApiKey);
   const loadHistory = useArticleHistoryStore(s => s.load);
+  const loadWordBanks = useWordbankStore(s => s.loadBanks);
 
   useEffect(() => {
     loadApiKey();
     loadHistory();
+    loadWordBanks();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

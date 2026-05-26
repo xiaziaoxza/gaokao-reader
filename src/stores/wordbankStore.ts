@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { WordBank, loadBuiltinBanks, loadCachedBanks, saveBanksToCache, downloadBank as dlBank } from '../services/wordbank';
+import { WordBank, loadBuiltinBanks, loadCachedBanks, saveBanksToCache, saveBankStates, loadBankStates, downloadBank as dlBank } from '../services/wordbank';
 import { PALETTE } from '../utils/colors';
 
 interface WordbankState {
@@ -23,7 +23,15 @@ export const useWordbankStore = create<WordbankState>((set, get) => ({
       loadBuiltinBanks(),
       loadCachedBanks(),
     ]);
-    set({ banks: [...builtin, ...cached], loaded: true });
+    // Apply saved enabled/disabled states
+    const states = loadBankStates();
+    const withStates = [...builtin, ...cached].map(b => {
+      if (b.id in states) {
+        return { ...b, enabled: states[b.id] };
+      }
+      return b;
+    });
+    set({ banks: withStates, loaded: true });
   },
 
   addDownloadedBank: async (url: string) => {
@@ -45,7 +53,8 @@ export const useWordbankStore = create<WordbankState>((set, get) => ({
       b.id === id ? { ...b, enabled: !b.enabled } : b
     );
     set({ banks });
-    // Persist if downloaded bank
+    // Persist enabled/disabled state for ALL banks
+    saveBankStates(banks);
     if (banks.find(b => b.id === id && b.source === 'downloaded')) {
       saveBanksToCache(banks);
     }

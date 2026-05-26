@@ -145,3 +145,26 @@ export function getAllEnabledWords(banks: WordBank[]): string[] {
   }
   return [...words];
 }
+
+// Persist enabled/disabled state for all banks (including builtin)
+const BANK_STATE_KEY = 'gaokao_bank_states';
+
+export function saveBankStates(banks: WordBank[]): void {
+  try {
+    const states: Record<string, boolean> = {};
+    for (const b of banks) {
+      states[b.id] = b.enabled;
+    }
+    localStorage.setItem(BANK_STATE_KEY, JSON.stringify(states));
+  } catch { /* storage full */ }
+}
+
+export function loadBankStates(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(BANK_STATE_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
