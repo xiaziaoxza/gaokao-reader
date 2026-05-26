@@ -25,12 +25,25 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
   const rematchedWords = useMemo(() => {
     if (!selected) return [];
     const enabledBanks = banks.filter(b => b.enabled);
-    if (enabledBanks.length === 0) return []; // no banks → no highlighting
+    if (enabledBanks.length === 0) return [];
     const banksForMatch = enabledBanks.map(b => ({
       id: b.id, color: b.color, bg: b.bg, words: b.words,
     }));
     return matchVocab(selected.articleText, banksForMatch);
   }, [selected, banks]);
+
+  // Count matched words per bank (only enabled banks)
+  const bankWordCounts = useMemo(() => {
+    const counts: Array<{ id: string; name: string; color: string; bg: string; count: number }> = [];
+    const enabledBanks = banks.filter(b => b.enabled);
+    for (const b of enabledBanks) {
+      const cnt = rematchedWords.filter(m => m.bankId === b.id).length;
+      if (cnt > 0) {
+        counts.push({ id: b.id, name: b.name, color: b.color, bg: b.bg, count: cnt });
+      }
+    }
+    return counts;
+  }, [rematchedWords, banks]);
 
   const handleView = (article: SavedArticle) => {
     setArticle(article.articleText, article.cnTranslation, article.title);
@@ -76,6 +89,28 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
           }}>
             ← 返回列表
           </button>
+          {/* Bank vocabulary counts */}
+          {bankWordCounts.length > 0 && (
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center',
+              marginBottom: 6,
+            }}>
+              {bankWordCounts.map(bc => (
+                <span key={bc.id} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '2px 8px', borderRadius: 10,
+                  background: bc.bg, border: `1px solid ${bc.color}`,
+                  fontSize: '0.7rem', color: bc.color, fontWeight: 600,
+                }}>
+                  <span style={{
+                    display: 'inline-block', width: 8, height: 8,
+                    borderRadius: '50%', background: bc.color,
+                  }} />
+                  {bc.name}: {bc.count}词
+                </span>
+              ))}
+            </div>
+          )}
           <h2 style={{ color: '#b87333', margin: 0, fontSize: '1.1rem' }}>{selected.title}</h2>
           <span style={{ color: '#8b7e6a', fontSize: '0.75rem' }}>{formatDate(selected.createdAt)}</span>
         </div>
