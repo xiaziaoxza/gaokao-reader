@@ -64,7 +64,7 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
   // Detail view
   if (selected) {
     return (
-      <div style={{ maxWidth: 780, margin: '0 auto', padding: 16 }}>
+      <div style={{ width: '95%', margin: '0 auto', padding: 16 }}>
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           marginBottom: 16, flexWrap: 'wrap', gap: 8,

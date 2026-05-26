@@ -86,7 +86,7 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
 
   return (
     <div style={{
-      maxWidth: 780, margin: '0 auto',
+      width: '95%', margin: '0 auto',
       background: 'rgba(255,255,255,0.75)',
       border: '1px solid #e8e0d5', borderRadius: 8,
       padding: '2rem 2rem', boxShadow: '0 2px 12px rgba(80,50,20,0.08)',

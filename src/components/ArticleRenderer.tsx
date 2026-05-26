@@ -63,7 +63,7 @@ export const ArticleRenderer: React.FC<Props> = ({ text, matchedWords, audioUrls
         return (
           <p key={pIdx} style={{
             marginBottom: '1.3rem', textAlign: 'justify', textIndent: '2em',
-            lineHeight: '1cm',
+            lineHeight: 1.9,
           }}>
             {renderParagraph(para, sorted, audioUrls, showTranslation)}
           </p>
