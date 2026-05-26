@@ -42,7 +42,7 @@ export async function sendChatMessage(params: ChatParams): Promise<ChatResult> {
       'Authorization': `Bearer ${params.apiKey}`,
     },
     body: JSON.stringify({
-      model: 'deepseek-v4-flash',
+      model: 'deepseek-chat',
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         ...params.messages,
