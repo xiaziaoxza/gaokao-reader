@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useArticleHistoryStore, SavedArticle } from '../stores/articleHistoryStore';
 import { useArticleStore } from '../stores/articleStore';
+import { useWordbankStore } from '../stores/wordbankStore';
 import { ArticleRenderer } from '../components/ArticleRenderer';
 import { TranslationToggle } from '../components/TranslationToggle';
+import { matchVocab } from '../services/vocab';
 
 interface Props {
   onBack?: () => void;
@@ -11,6 +13,7 @@ interface Props {
 export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
   const { articles, loaded, load, remove } = useArticleHistoryStore();
   const { setArticle, setMatchedWords, setAudioUrls, setStatus } = useArticleStore();
+  const { banks } = useWordbankStore();
   const [selected, setSelected] = useState<SavedArticle | null>(null);
   const [showTranslation, setShowTranslation] = useState(false);
 
@@ -18,14 +21,39 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
     if (!loaded) load();
   }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Rematch selected article with current bank colors so color changes sync
+  const rematchedWords = useMemo(() => {
+    if (!selected) return [];
+    const enabledBanks = banks.filter(b => b.enabled);
+    if (enabledBanks.length === 0) return selected.matchedWords;
+    const banksForMatch = enabledBanks.map(b => ({
+      id: b.id, color: b.color, bg: b.bg, words: b.words,
+    }));
+    const fresh = matchVocab(selected.articleText, banksForMatch);
+    // Merge fresh colors into saved words (preserves word order/positions)
+    const colorMap = new Map<string, { color: string; bg: string }>();
+    for (const m of fresh) {
+      colorMap.set(m.lower, { color: m.color, bg: m.bg });
+    }
+    return selected.matchedWords.map(m => {
+      const update = colorMap.get(m.lower);
+      return update ? { ...m, color: update.color, bg: update.bg } : m;
+    });
+  }, [selected, banks]);
+
   const handleView = (article: SavedArticle) => {
-    // Load article into the reader store so ReaderView can display it
     setArticle(article.articleText, article.cnTranslation, article.title);
-    setMatchedWords(article.matchedWords);
-    setAudioUrls(new Map()); // audio needs re-download
-    setStatus('ready');
     setSelected(article);
   };
+
+  // Sync rematched words to articleStore whenever selected article or colors change
+  useEffect(() => {
+    if (selected) {
+      setMatchedWords(rematchedWords);
+      setAudioUrls(new Map());
+      setStatus('ready');
+    }
+  }, [rematchedWords, selected, setMatchedWords, setAudioUrls, setStatus]);
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
@@ -71,7 +99,7 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
         }}>
           <ArticleRenderer
             text={selected.articleText}
-            matchedWords={selected.matchedWords}
+            matchedWords={rematchedWords}
             audioUrls={new Map()}
             showTranslation={showTranslation}
           />
