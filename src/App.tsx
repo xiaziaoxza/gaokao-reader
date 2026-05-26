@@ -1,15 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChatView } from './views/ChatView';
 import { ReaderView } from './views/ReaderView';
-import { WordbankView } from './views/WordbankView';
 import { SettingsView } from './views/SettingsView';
+import { useSettingsStore } from './stores/settingsStore';
 
-type View = 'chat' | 'reader' | 'wordbanks' | 'settings';
+type View = 'chat' | 'reader' | 'settings';
 
 const NAV_HEIGHT = 60;
 
 const App: React.FC = () => {
   const [view, setView] = useState<View>('chat');
+  const loadApiKey = useSettingsStore(s => s.loadApiKey);
+
+  useEffect(() => {
+    loadApiKey();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div style={{
@@ -23,7 +28,6 @@ const App: React.FC = () => {
       <main style={{ padding: view === 'chat' ? 0 : '16px 16px 40px', paddingBottom: view === 'chat' ? NAV_HEIGHT + 8 : undefined }}>
         {view === 'chat' && <ChatView onViewArticle={() => setView('reader')} />}
         {view === 'reader' && <ReaderView onBack={() => setView('chat')} />}
-        {view === 'wordbanks' && <WordbankView onBack={() => setView('chat')} />}
         {view === 'settings' && <SettingsView onBack={() => setView('chat')} />}
       </main>
 
@@ -41,7 +45,6 @@ const App: React.FC = () => {
         {[
           { id: 'chat' as View, icon: '💬', label: '对话' },
           { id: 'reader' as View, icon: '📖', label: '阅读' },
-          { id: 'wordbanks' as View, icon: '📚', label: '词库' },
           { id: 'settings' as View, icon: '⚙️', label: '设置' },
         ].map(tab => (
           <button

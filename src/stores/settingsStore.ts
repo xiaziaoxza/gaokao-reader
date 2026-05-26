@@ -36,7 +36,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
 
   clearApiKey: () => {
-    localStorage.removeItem('gk_encrypted_key');
+    localStorage.removeItem('gk_api_key');
     set({ apiKey: '', hasKey: false });
   },
 
