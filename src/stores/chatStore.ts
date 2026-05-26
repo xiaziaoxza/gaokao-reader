@@ -1,55 +1,36 @@
 import { create } from 'zustand';
-import type { ChatMessage } from '../types/chat';
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: number;
+  hasArticle?: boolean;
+  articleText?: string;
+  articleTranslation?: string;
+}
 
 interface ChatState {
   messages: ChatMessage[];
-  isLoading: boolean;
-  error: string | null;
-  // 历史分页
-  historyCursor: number | null;
-  hasMore: boolean;
-  isLoadingMore: boolean;
-  loadedRounds: number;
-
-  addMessage: (msg: ChatMessage) => void;
-  prependMessages: (msgs: ChatMessage[]) => void;
-  setLoading: (loading: boolean) => void;
-  setError: (error: string | null) => void;
+  sending: boolean;
+  addMessage: (msg: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
+  setSending: (v: boolean) => void;
   clearMessages: () => void;
-  setHistoryMeta: (meta: { cursor: number | null; hasMore: boolean; loadedRounds: number }) => void;
-  setLoadingMore: (loading: boolean) => void;
 }
 
-const MAX_ROUNDS = 40;
+let idCounter = 0;
+function genId() { return 'msg_' + (++idCounter) + '_' + Date.now(); }
 
 export const useChatStore = create<ChatState>((set) => ({
   messages: [],
-  isLoading: false,
-  error: null,
-  historyCursor: null,
-  hasMore: true,
-  isLoadingMore: false,
-  loadedRounds: 0,
+  sending: false,
 
-  addMessage: (msg) =>
-    set((s) => ({ messages: [...s.messages, msg] })),
+  addMessage: (msg) => {
+    set(state => ({
+      messages: [...state.messages, { ...msg, id: genId(), timestamp: Date.now() }],
+    }));
+  },
 
-  prependMessages: (msgs) =>
-    set((s) => ({ messages: [...msgs, ...s.messages] })),
-
-  setLoading: (loading) => set({ isLoading: loading }),
-  setError: (error) => set({ error }),
-
-  clearMessages: () => set({
-    messages: [], error: null,
-    historyCursor: null, hasMore: true, loadedRounds: 0,
-  }),
-
-  setHistoryMeta: (meta) => set({
-    historyCursor: meta.cursor,
-    hasMore: meta.hasMore && meta.loadedRounds < MAX_ROUNDS,
-    loadedRounds: meta.loadedRounds,
-  }),
-
-  setLoadingMore: (loading) => set({ isLoadingMore: loading }),
+  setSending: (v) => set({ sending: v }),
+  clearMessages: () => set({ messages: [] }),
 }));

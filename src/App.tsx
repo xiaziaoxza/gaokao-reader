@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
-import { SettingsView } from './views/SettingsView';
-import { WordbankView } from './views/WordbankView';
-import { GenerateView } from './views/GenerateView';
+import { ChatView } from './views/ChatView';
 import { ReaderView } from './views/ReaderView';
+import { WordbankView } from './views/WordbankView';
+import { SettingsView } from './views/SettingsView';
 
-type View = 'generate' | 'settings' | 'wordbanks' | 'reader';
+type View = 'chat' | 'reader' | 'wordbanks' | 'settings';
 
 const App: React.FC = () => {
-  const [view, setView] = useState<View>('generate');
+  const [view, setView] = useState<View>('chat');
 
   return (
     <div style={{
@@ -26,48 +26,37 @@ const App: React.FC = () => {
         backdropFilter: 'blur(12px)',
       }}>
         {[
-          { id: 'generate' as View, label: '📝 生成', desc: '创建新文章' },
-          { id: 'reader' as View, label: '📖 阅读', desc: '查看文章' },
-          { id: 'wordbanks' as View, label: '📚 词库', desc: '管理词库' },
-          { id: 'settings' as View, label: '⚙️ 设置', desc: 'API Key' },
+          { id: 'chat' as View, icon: '💬', label: '对话' },
+          { id: 'reader' as View, icon: '📖', label: '阅读' },
+          { id: 'wordbanks' as View, icon: '📚', label: '词库' },
+          { id: 'settings' as View, icon: '⚙️', label: '设置' },
         ].map(tab => (
           <button
             key={tab.id}
             onClick={() => setView(tab.id)}
             style={{
-              padding: '8px 14px',
+              padding: '8px 16px',
               border: view === tab.id ? '1px solid #b87333' : '1px solid transparent',
               borderRadius: 10,
               background: view === tab.id ? '#fef5ec' : 'transparent',
               color: view === tab.id ? '#b87333' : '#8b7e6a',
               cursor: 'pointer',
-              fontSize: '0.8rem',
+              fontSize: '0.85rem',
               fontWeight: view === tab.id ? 600 : 400,
               transition: 'all 0.2s',
-              display: 'flex', flexDirection: 'column', alignItems: 'center',
-              gap: 1,
             }}
           >
-            <span style={{ fontSize: '1rem' }}>{tab.label.split(' ')[0]}</span>
-            <span style={{ fontSize: '0.65rem' }}>{tab.label.split(' ')[1]}</span>
+            {tab.icon} {tab.label}
           </button>
         ))}
       </nav>
 
       {/* View content */}
-      <main style={{ padding: '16px 16px 40px' }}>
-        {view === 'generate' && (
-          <GenerateView onViewArticle={() => setView('reader')} />
-        )}
-        {view === 'settings' && (
-          <SettingsView onBack={() => setView('generate')} />
-        )}
-        {view === 'wordbanks' && (
-          <WordbankView onBack={() => setView('generate')} />
-        )}
-        {view === 'reader' && (
-          <ReaderView onBack={() => setView('generate')} />
-        )}
+      <main style={{ padding: view === 'chat' ? 0 : '16px 16px 40px' }}>
+        {view === 'chat' && <ChatView onViewArticle={() => setView('reader')} />}
+        {view === 'reader' && <ReaderView onBack={() => setView('chat')} />}
+        {view === 'wordbanks' && <WordbankView onBack={() => setView('chat')} />}
+        {view === 'settings' && <SettingsView onBack={() => setView('chat')} />}
       </main>
     </div>
   );

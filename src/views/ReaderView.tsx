@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useArticleStore } from '../stores/articleStore';
 import { ArticleRenderer } from '../components/ArticleRenderer';
 import { TranslationToggle } from '../components/TranslationToggle';
+import { synthesizeLongText } from '../services/edgeTTS';
 
 interface Props {
   onBack: () => void;
@@ -10,12 +11,51 @@ interface Props {
 export const ReaderView: React.FC<Props> = ({ onBack }) => {
   const { articleText, cnTranslation, matchedWords, audioUrls, status } = useArticleStore();
   const [showTranslation, setShowTranslation] = useState(false);
+  const [narrationUrl, setNarrationUrl] = useState<string | null>(null);
+  const [narrating, setNarrating] = useState(false);
+  const [narrateProgress, setNarrateProgress] = useState('');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleNarrate = useCallback(async () => {
+    if (!articleText) return;
+
+    if (narrationUrl) {
+      // Already generated, just play
+      if (audioRef.current) {
+        audioRef.current.play().catch(() => {});
+      }
+      return;
+    }
+
+    setNarrating(true);
+    setNarrateProgress('正在生成全文语音…');
+    try {
+      const blob = await synthesizeLongText(
+        articleText,
+        'en-US-female',
+        (current, total) => {
+          setNarrateProgress(`生成语音 ${current}/${total} 段`);
+        }
+      );
+      const url = URL.createObjectURL(blob);
+      setNarrationUrl(url);
+      setNarrateProgress('');
+
+      // Auto-play
+      const a = new Audio(url);
+      audioRef.current = a;
+      a.play().catch(() => {});
+    } catch (e: any) {
+      setNarrateProgress('语音生成失败: ' + (e.message || '未知错误'));
+    } finally {
+      setNarrating(false);
+    }
+  }, [articleText, narrationUrl]);
 
   if (status !== 'ready' || !articleText) {
     return (
       <div style={{ padding: 40, textAlign: 'center', color: '#8b7e6a' }}>
-        请先生成文章
-        <br />
+        <p>还没有生成文章</p>
         <button
           onClick={onBack}
           style={{
@@ -24,7 +64,7 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
             background: '#fff', cursor: 'pointer', color: '#8b7e6a',
           }}
         >
-          返回
+          ← 返回对话
         </button>
       </div>
     );
@@ -42,6 +82,7 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
         marginBottom: 16, paddingBottom: 12,
         borderBottom: '1px solid #e8e0d5',
+        flexWrap: 'wrap', gap: 8,
       }}>
         <button
           onClick={onBack}
@@ -51,12 +92,60 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
             color: '#8b7e6a', fontSize: '0.8rem',
           }}
         >
-          ← 返回
+          ← 对话
         </button>
-        <span style={{ fontSize: '0.75rem', color: '#8b7e6a' }}>
-          {matchedWords.length} 个词汇标注 · {audioUrls.size} 个音频
-        </span>
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: '0.75rem', color: '#8b7e6a' }}>
+            {matchedWords.length} 词汇 · {audioUrls.size} 音频
+          </span>
+
+          {/* Full narration button */}
+          <button
+            onClick={handleNarrate}
+            disabled={narrating}
+            style={{
+              padding: '4px 12px', border: '1px solid #b87333',
+              borderRadius: 16, background: narrating ? '#fef5ec' : '#fff',
+              cursor: narrating ? 'default' : 'pointer',
+              color: '#b87333', fontSize: '0.8rem',
+              display: 'flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            {narrating ? '⏳' : narrationUrl ? '🔊' : '🎧'}
+            {narrating ? '生成中' : narrationUrl ? '全文朗读' : '生成全文语音'}
+          </button>
+        </div>
       </div>
+
+      {/* Narration progress */}
+      {narrateProgress && (
+        <div style={{
+          textAlign: 'center', padding: '6px 12px', marginBottom: 12,
+          background: '#fef5ec', borderRadius: 8,
+          color: '#b87333', fontSize: '0.8rem',
+        }}>
+          {narrateProgress}
+        </div>
+      )}
+
+      {/* Audio player (shown after generation) */}
+      {narrationUrl && (
+        <div style={{
+          marginBottom: 16, padding: '8px 12px',
+          background: '#faf8f5', borderRadius: 8,
+          border: '1px solid #e8e0d5',
+        }}>
+          <audio
+            controls
+            style={{ width: '100%', height: 32 }}
+            src={narrationUrl}
+            ref={audioRef}
+          >
+            你的浏览器不支持音频播放
+          </audio>
+        </div>
+      )}
 
       {/* Translation toggle */}
       <TranslationToggle on={showTranslation} onToggle={() => setShowTranslation(!showTranslation)} />
@@ -69,7 +158,7 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
         showTranslation={showTranslation}
       />
 
-      {/* Chinese translation (always visible at bottom) */}
+      {/* Chinese translation */}
       {cnTranslation && (
         <div style={{
           marginTop: '2rem', paddingTop: '1.5rem',
