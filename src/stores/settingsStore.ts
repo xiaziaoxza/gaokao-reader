@@ -27,10 +27,15 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
 
   loadApiKey: async () => {
-    if (hasApiKey()) {
-      const key = await decryptApiKey();
-      set({ apiKey: key || '', hasKey: !!key, keyLoaded: true });
-    } else {
+    try {
+      if (hasApiKey()) {
+        const key = await decryptApiKey();
+        set({ apiKey: key || '', hasKey: !!key, keyLoaded: true });
+      } else {
+        set({ keyLoaded: true });
+      }
+    } catch {
+      // localStorage 不可用（隐私模式/存储满等）
       set({ keyLoaded: true });
     }
   },
