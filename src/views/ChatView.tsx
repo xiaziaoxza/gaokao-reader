@@ -3,6 +3,7 @@ import { useChatStore } from '../stores/chatStore';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useWordbankStore } from '../stores/wordbankStore';
 import { useArticleStore } from '../stores/articleStore';
+import { useArticleHistoryStore } from '../stores/articleHistoryStore';
 import { sendChatMessage } from '../services/chat';
 import { matchVocab } from '../services/vocab';
 import { downloadAudioBatch } from '../services/audio';
@@ -10,13 +11,15 @@ import { getAllEnabledWords } from '../services/wordbank';
 
 interface Props {
   onViewArticle: () => void;
+  onViewHistory: () => void;
 }
 
-export const ChatView: React.FC<Props> = ({ onViewArticle }) => {
+export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
   const { messages, sending, addMessage, setSending } = useChatStore();
   const { apiKey } = useSettingsStore();
   const { banks } = useWordbankStore();
   const { setStatus, setArticle, setMatchedWords, setAudioUrls, setProgress } = useArticleStore();
+  const saveArticle = useArticleHistoryStore(s => s.save);
 
   const [input, setInput] = useState('');
   const [customWords, setCustomWords] = useState('');
@@ -91,6 +94,15 @@ export const ChatView: React.FC<Props> = ({ onViewArticle }) => {
         }
 
         setStatus('ready');
+
+        // Auto-save to history
+        const title = (result.articleText || '').split(/[.!\n]/)[0]?.trim().slice(0, 60) || '未命名文章';
+        saveArticle({
+          title,
+          articleText: result.articleText || '',
+          cnTranslation: result.articleTranslation || '',
+          matchedWords: matched,
+        });
       }
     } catch (e: any) {
       addMessage({ role: 'assistant', content: '抱歉，出错了: ' + (e.message || '未知错误') });

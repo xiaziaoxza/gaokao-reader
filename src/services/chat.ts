@@ -13,6 +13,7 @@ When generating an article:
 - Wrap the article part between \`\`\`article and \`\`\` markers so the app can detect it.
 - The article should be readable, natural English suitable for Gaokao reading comprehension.
 - Include all vocabulary words the student provided.
+- IMPORTANT: Write the article as PLAIN TEXT only. Do NOT use **, ##, or any markdown formatting. The app has its own visual highlighting system and markdown characters will break the display. Words that need emphasis should just be written naturally in the text — never wrapped in special characters.
 
 Example article output:
 \`\`\`article
@@ -66,7 +67,9 @@ export async function sendChatMessage(params: ChatParams): Promise<ChatResult> {
   if (articleMatch) {
     const articleBlock = articleMatch[1];
     const parts = articleBlock.split('---');
-    const articleText = parts[0]?.trim() || '';
+    // Strip any markdown formatting the model may have added
+    const rawArticle = parts[0]?.trim() || '';
+    const articleText = rawArticle.replace(/\*\*(.*?)\*\*/g, '$1').replace(/__([^_]+)__/g, '$1');
     const translation = parts[1]?.trim() || '';
 
     // Return non-article text as the chat message

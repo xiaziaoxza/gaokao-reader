@@ -27,6 +27,7 @@ Requirements:
 - Use natural, fluent English appropriate for high school reading comprehension
 - Cover a variety of sentence structures (complex sentences, clauses, etc.)
 - The article should be coherent and engaging
+- IMPORTANT: Write as PLAIN TEXT. Do NOT use **, ##, or any markdown formatting. The app handles word highlighting visually.
 
 After the article, add a line with "---" only, then provide a complete Chinese translation of the entire article.`;
 
@@ -54,7 +55,9 @@ After the article, add a line with "---" only, then provide a complete Chinese t
 
   // Parse article and translation
   const parts = fullText.split('---');
-  const article = parts[0]?.trim() || '';
+  // Strip any markdown formatting the model may have added
+  const rawArticle = parts[0]?.trim() || '';
+  const article = rawArticle.replace(/\*\*(.*?)\*\*/g, '$1').replace(/__([^_]+)__/g, '$1');
   const translation = parts[1]?.trim() || '';
 
   if (!article) throw new Error('Failed to generate article');
