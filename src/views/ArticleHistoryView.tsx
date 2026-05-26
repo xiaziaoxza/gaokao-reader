@@ -21,24 +21,15 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
     if (!loaded) load();
   }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Rematch selected article with current bank colors so color changes sync
+  // Re-match with current bank settings: colors, enabled/disabled state
   const rematchedWords = useMemo(() => {
     if (!selected) return [];
     const enabledBanks = banks.filter(b => b.enabled);
-    if (enabledBanks.length === 0) return selected.matchedWords;
+    if (enabledBanks.length === 0) return []; // no banks → no highlighting
     const banksForMatch = enabledBanks.map(b => ({
       id: b.id, color: b.color, bg: b.bg, words: b.words,
     }));
-    const fresh = matchVocab(selected.articleText, banksForMatch);
-    // Merge fresh colors into saved words (preserves word order/positions)
-    const colorMap = new Map<string, { color: string; bg: string }>();
-    for (const m of fresh) {
-      colorMap.set(m.lower, { color: m.color, bg: m.bg });
-    }
-    return selected.matchedWords.map(m => {
-      const update = colorMap.get(m.lower);
-      return update ? { ...m, color: update.color, bg: update.bg } : m;
-    });
+    return matchVocab(selected.articleText, banksForMatch);
   }, [selected, banks]);
 
   const handleView = (article: SavedArticle) => {

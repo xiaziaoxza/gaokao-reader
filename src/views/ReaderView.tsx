@@ -1,8 +1,10 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { useArticleStore } from '../stores/articleStore';
+import { useWordbankStore } from '../stores/wordbankStore';
 import { ArticleRenderer } from '../components/ArticleRenderer';
 import { TranslationToggle } from '../components/TranslationToggle';
 import { synthesizeLongText } from '../services/edgeTTS';
+import { matchVocab } from '../services/vocab';
 
 interface Props {
   onBack: () => void;
@@ -10,7 +12,19 @@ interface Props {
 
 export const ReaderView: React.FC<Props> = ({ onBack }) => {
   const { articleText, cnTranslation, matchedWords, audioUrls, status } = useArticleStore();
+  const { banks } = useWordbankStore();
   const [showTranslation, setShowTranslation] = useState(false);
+
+  // Re-match with current bank settings for dynamic color/state sync
+  const liveMatchedWords = useMemo(() => {
+    if (!articleText) return matchedWords;
+    const enabledBanks = banks.filter(b => b.enabled);
+    if (enabledBanks.length === 0) return [];
+    const banksForMatch = enabledBanks.map(b => ({
+      id: b.id, color: b.color, bg: b.bg, words: b.words,
+    }));
+    return matchVocab(articleText, banksForMatch);
+  }, [articleText, banks, matchedWords]);
   const [narrationUrl, setNarrationUrl] = useState<string | null>(null);
   const [narrating, setNarrating] = useState(false);
   const [narrateProgress, setNarrateProgress] = useState('');
@@ -97,7 +111,7 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{ fontSize: '0.75rem', color: '#8b7e6a' }}>
-            {matchedWords.length} 词汇 · {audioUrls.size} 音频
+            {liveMatchedWords.length} 词汇 · {audioUrls.size} 音频
           </span>
 
           {/* Full narration button */}
@@ -153,7 +167,7 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
       {/* Article */}
       <ArticleRenderer
         text={articleText}
-        matchedWords={matchedWords}
+        matchedWords={liveMatchedWords}
         audioUrls={audioUrls}
         showTranslation={showTranslation}
       />
