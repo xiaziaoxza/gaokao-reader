@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useArticleHistoryStore, SavedArticle } from '../stores/articleHistoryStore';
 import { useArticleStore } from '../stores/articleStore';
 import { useWordbankStore } from '../stores/wordbankStore';
@@ -16,6 +16,7 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
   const { banks } = useWordbankStore();
   const [selected, setSelected] = useState<SavedArticle | null>(null);
   const [showTranslation, setShowTranslation] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!loaded) load();
@@ -48,6 +49,14 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
   const handleView = (article: SavedArticle) => {
     setArticle(article.articleText, article.cnTranslation, article.title);
     setSelected(article);
+    // Scroll to top when entering detail view
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  };
+
+  const handleBack = () => {
+    setSelected(null);
+    // Reset scroll position to prevent zoom/shift issue
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   };
 
   // Sync rematched words to articleStore whenever selected article or colors change
@@ -77,43 +86,51 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
   // Detail view
   if (selected) {
     return (
-      <div style={{ width: '95%', margin: '0 auto', padding: 16 }}>
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: 16 }}>
         <div style={{
           display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           marginBottom: 16, flexWrap: 'wrap', gap: 8,
         }}>
-          <button onClick={() => setSelected(null)} style={{
+          <button onClick={handleBack} style={{
             padding: '4px 14px', border: '1px solid #e8e0d5',
             borderRadius: 16, background: '#fff', cursor: 'pointer',
             color: '#8b7e6a', fontSize: '0.8rem',
           }}>
             ← 返回列表
           </button>
-          {/* Bank vocabulary counts */}
-          {bankWordCounts.length > 0 && (
-            <div style={{
-              display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center',
-              marginBottom: 6,
-            }}>
-              {bankWordCounts.map(bc => (
-                <span key={bc.id} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  padding: '2px 8px', borderRadius: 10,
-                  background: bc.bg, border: `1px solid ${bc.color}`,
-                  fontSize: '0.7rem', color: bc.color, fontWeight: 600,
-                }}>
-                  <span style={{
-                    display: 'inline-block', width: 8, height: 8,
-                    borderRadius: '50%', background: bc.color,
-                  }} />
-                  {bc.name}: {bc.count}词
-                </span>
-              ))}
-            </div>
-          )}
-          <h2 style={{ color: '#b87333', margin: 0, fontSize: '1.1rem' }}>{selected.title}</h2>
           <span style={{ color: '#8b7e6a', fontSize: '0.75rem' }}>{formatDate(selected.createdAt)}</span>
         </div>
+
+        {/* Title */}
+        <h2 style={{
+          textAlign: 'center', color: '#2c2416', fontSize: '1.1rem',
+          fontWeight: 700, margin: '0 0 12px', lineHeight: 1.4,
+        }}>
+          {selected.title}
+        </h2>
+
+        {/* Bank vocabulary counts */}
+        {bankWordCounts.length > 0 && (
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center',
+            marginBottom: 12,
+          }}>
+            {bankWordCounts.map(bc => (
+              <span key={bc.id} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '2px 8px', borderRadius: 10,
+                background: bc.bg, border: `1px solid ${bc.color}`,
+                fontSize: '0.7rem', color: bc.color, fontWeight: 600,
+              }}>
+                <span style={{
+                  display: 'inline-block', width: 8, height: 8,
+                  borderRadius: '50%', background: bc.color,
+                }} />
+                {bc.name}: {bc.count}词
+              </span>
+            ))}
+          </div>
+        )}
 
         <TranslationToggle on={showTranslation} onToggle={() => setShowTranslation(!showTranslation)} />
 
@@ -122,6 +139,9 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
           border: '1px solid #e8e0d5', borderRadius: 8,
           padding: '2rem 2rem', boxShadow: '0 2px 12px rgba(80,50,20,0.08)',
           marginTop: 12,
+          overflow: 'hidden',
+          wordWrap: 'break-word',
+          overflowWrap: 'break-word',
         }}>
           <ArticleRenderer
             text={selected.articleText}
@@ -136,6 +156,7 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
             marginTop: '2rem', padding: '1.5rem 2rem',
             background: 'rgba(255,255,255,0.75)',
             border: '1px solid #e8e0d5', borderRadius: 8,
+            overflow: 'hidden',
           }}>
             <h3 style={{ fontSize: '1rem', color: '#b87333', textAlign: 'center', marginBottom: '1rem' }}>
               中文译文
@@ -153,7 +174,7 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
 
   // List view
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: 20 }}>
+    <div ref={listRef} style={{ maxWidth: 600, margin: '0 auto', padding: 20 }}>
       <h2 style={{ color: '#b87333', marginBottom: 20, textAlign: 'center' }}>文章历史</h2>
 
       {articles.length === 0 ? (
@@ -177,7 +198,7 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
             onMouseLeave={e => (e.currentTarget.style.boxShadow = '0 1px 4px rgba(80,50,20,0.04)')}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, color: '#2c2416', fontSize: '0.95rem', marginBottom: 4 }}>
                   {a.title}
                 </div>
@@ -185,13 +206,6 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
                   <span>{formatDate(a.createdAt)}</span>
                   <span>{a.matchedWords.length} 词汇</span>
                   <span>{(a.articleText || '').length} 字符</span>
-                </div>
-                <div style={{
-                  fontSize: '0.8rem', color: '#8b7e6a', marginTop: 6,
-                  overflow: 'hidden', textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap', maxWidth: '100%',
-                }}>
-                  {(a.articleText || '').slice(0, 80)}…
                 </div>
               </div>
               <button

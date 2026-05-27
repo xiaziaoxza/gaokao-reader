@@ -4,14 +4,14 @@ import { useWordbankStore } from '../stores/wordbankStore';
 import { ArticleRenderer } from '../components/ArticleRenderer';
 import { TranslationToggle } from '../components/TranslationToggle';
 import { matchVocab } from '../services/vocab';
-import { speak, stopSpeaking, isSpeaking, isSpeechAvailable } from '../services/speech';
+import { synthesizeLongText } from '../services/edgeTTS';
 
 interface Props {
   onBack: () => void;
 }
 
 export const ReaderView: React.FC<Props> = ({ onBack }) => {
-  const { articleText, cnTranslation, matchedWords, audioUrls, status } = useArticleStore();
+  const { articleText, cnTranslation, title, matchedWords, audioUrls, status } = useArticleStore();
   const { banks } = useWordbankStore();
   const [showTranslation, setShowTranslation] = useState(false);
 
@@ -25,43 +25,68 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
     }));
     return matchVocab(articleText, banksForMatch);
   }, [articleText, banks, matchedWords]);
+
   const [narrating, setNarrating] = useState(false);
   const [narrateProgress, setNarrateProgress] = useState('');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const handleNarrate = useCallback(() => {
+  const stopNarrate = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+    setNarrating(false);
+    setNarrateProgress('');
+  }, []);
+
+  const handleNarrate = useCallback(async () => {
     if (!articleText) return;
 
-    if (isSpeaking()) {
-      stopSpeaking();
-      setNarrating(false);
-      setNarrateProgress('');
-      return;
-    }
-
-    if (!isSpeechAvailable()) {
-      setNarrateProgress('此设备不支持语音合成');
+    if (narrating) {
+      stopNarrate();
       return;
     }
 
     setNarrating(true);
-    setNarrateProgress('正在朗读…');
+    setNarrateProgress('正在合成语音…');
 
-    speak(
-      articleText,
-      (charIndex) => {
-        const pct = Math.round((charIndex / articleText.length) * 100);
-        setNarrateProgress(`朗读中 ${pct}%`);
-      },
-      () => {
+    try {
+      const blob = await synthesizeLongText(
+        articleText,
+        'en-US-female',
+        (current, total) => {
+          const pct = Math.round((current / total) * 90);
+          setNarrateProgress(`合成中 ${pct}% (${current}/${total})`);
+        }
+      );
+
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      audioRef.current = a;
+
+      setNarrateProgress('正在朗读…');
+
+      a.onended = () => {
         setNarrating(false);
         setNarrateProgress('朗读完成');
-      },
-      (err) => {
+        URL.revokeObjectURL(url);
+        audioRef.current = null;
+      };
+
+      a.onerror = () => {
         setNarrating(false);
-        setNarrateProgress('朗读失败: ' + err);
-      }
-    );
-  }, [articleText]);
+        setNarrateProgress('朗读失败: 音频播放错误');
+        URL.revokeObjectURL(url);
+        audioRef.current = null;
+      };
+
+      await a.play();
+    } catch (err: any) {
+      setNarrating(false);
+      setNarrateProgress('朗读失败: ' + (err.message || '语音合成错误'));
+    }
+  }, [articleText, narrating, stopNarrate]);
 
   if (status !== 'ready' || !articleText) {
     return (
@@ -138,6 +163,16 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
         }}>
           {narrateProgress}
         </div>
+      )}
+
+      {/* Article title */}
+      {title && (
+        <h2 style={{
+          textAlign: 'center', color: '#2c2416', fontSize: '1.15rem',
+          fontWeight: 700, margin: '0 0 8px', lineHeight: 1.4,
+        }}>
+          {title}
+        </h2>
       )}
 
       {/* Bank vocabulary counts */}
