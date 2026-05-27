@@ -3,8 +3,8 @@ import { useArticleStore } from '../stores/articleStore';
 import { useWordbankStore } from '../stores/wordbankStore';
 import { ArticleRenderer } from '../components/ArticleRenderer';
 import { TranslationToggle } from '../components/TranslationToggle';
-import { synthesizeLongText } from '../services/edgeTTS';
 import { matchVocab } from '../services/vocab';
+import { speak, stopSpeaking, isSpeaking, isSpeechAvailable, estimateDuration } from '../services/speech';
 
 interface Props {
   onBack: () => void;
@@ -25,46 +25,43 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
     }));
     return matchVocab(articleText, banksForMatch);
   }, [articleText, banks, matchedWords]);
-  const [narrationUrl, setNarrationUrl] = useState<string | null>(null);
   const [narrating, setNarrating] = useState(false);
   const [narrateProgress, setNarrateProgress] = useState('');
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const handleNarrate = useCallback(async () => {
+  const handleNarrate = useCallback(() => {
     if (!articleText) return;
 
-    if (narrationUrl) {
-      // Already generated, just play
-      if (audioRef.current) {
-        audioRef.current.play().catch(() => {});
-      }
+    if (isSpeaking()) {
+      stopSpeaking();
+      setNarrating(false);
+      setNarrateProgress('');
+      return;
+    }
+
+    if (!isSpeechAvailable()) {
+      setNarrateProgress('此设备不支持语音合成');
       return;
     }
 
     setNarrating(true);
-    setNarrateProgress('正在生成全文语音…');
-    try {
-      const blob = await synthesizeLongText(
-        articleText,
-        'en-US-female',
-        (current, total) => {
-          setNarrateProgress(`生成语音 ${current}/${total} 段`);
-        }
-      );
-      const url = URL.createObjectURL(blob);
-      setNarrationUrl(url);
-      setNarrateProgress('');
+    setNarrateProgress('正在朗读…');
 
-      // Auto-play
-      const a = new Audio(url);
-      audioRef.current = a;
-      a.play().catch(() => {});
-    } catch (e: any) {
-      setNarrateProgress('语音生成失败: ' + (e.message || '未知错误'));
-    } finally {
-      setNarrating(false);
-    }
-  }, [articleText, narrationUrl]);
+    speak(
+      articleText,
+      (charIndex) => {
+        const pct = Math.round((charIndex / articleText.length) * 100);
+        setNarrateProgress(`朗读中 ${pct}%`);
+      },
+      () => {
+        setNarrating(false);
+        setNarrateProgress('朗读完成');
+      },
+      (err) => {
+        setNarrating(false);
+        setNarrateProgress('朗读失败: ' + err);
+      }
+    );
+  }, [articleText]);
 
   if (status !== 'ready' || !articleText) {
     return (
@@ -126,8 +123,8 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
               display: 'flex', alignItems: 'center', gap: 4,
             }}
           >
-            {narrating ? '⏳' : narrationUrl ? '🔊' : '🎧'}
-            {narrating ? '生成中' : narrationUrl ? '全文朗读' : '生成全文语音'}
+            {narrating ? '⏹' : '🔊'}
+            {narrating ? '停止朗读' : '全文朗读'}
           </button>
         </div>
       </div>
@@ -140,24 +137,6 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
           color: '#b87333', fontSize: '0.8rem',
         }}>
           {narrateProgress}
-        </div>
-      )}
-
-      {/* Audio player (shown after generation) */}
-      {narrationUrl && (
-        <div style={{
-          marginBottom: 16, padding: '8px 12px',
-          background: '#faf8f5', borderRadius: 8,
-          border: '1px solid #e8e0d5',
-        }}>
-          <audio
-            controls
-            style={{ width: '100%', height: 32 }}
-            src={narrationUrl}
-            ref={audioRef}
-          >
-            你的浏览器不支持音频播放
-          </audio>
         </div>
       )}
 

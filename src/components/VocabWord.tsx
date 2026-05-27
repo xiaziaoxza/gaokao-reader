@@ -16,6 +16,7 @@ export const VocabWord: React.FC<Props> = ({ word, translation, color, bg, audio
 
   const handleSpeak = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
+    // Try pre-downloaded audio URL first
     if (audioUrl) {
       if (audioRef.current) {
         audioRef.current.pause();
@@ -27,8 +28,18 @@ export const VocabWord: React.FC<Props> = ({ word, translation, color, bg, audio
       a.onended = () => setSpeaking(false);
       a.onerror = () => setSpeaking(false);
       a.play().catch(() => setSpeaking(false));
+    } else if ('speechSynthesis' in window) {
+      // Fallback to built-in speech synthesis
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(word);
+      u.lang = 'en-US';
+      u.rate = 0.8;
+      setSpeaking(true);
+      u.onend = () => setSpeaking(false);
+      u.onerror = () => setSpeaking(false);
+      window.speechSynthesis.speak(u);
     }
-  }, [audioUrl]);
+  }, [audioUrl, word]);
 
   const handleBox = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
