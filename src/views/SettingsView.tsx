@@ -121,6 +121,25 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
     <div style={{ maxWidth: 600, margin: '0 auto', padding: 20 }}>
       <h2 style={{ color: '#b87333', marginBottom: 20, textAlign: 'center' }}>设置</h2>
 
+      {/* Debug panel */}
+      <div style={{
+        padding: 10, marginBottom: 16,
+        border: '1px solid #3498db', borderRadius: 6,
+        background: '#f0f8ff', fontSize: '0.72rem',
+        fontFamily: 'monospace', color: '#2c3e50',
+      }}>
+        <div style={{ fontWeight: 600, marginBottom: 4, color: '#2980b9' }}>🔍 状态调试</div>
+        <div>keyLoaded: {String(keyLoaded)}</div>
+        <div>hasKey (store): {String(hasKey)}</div>
+        <div>apiKey length: {apiKey.length}</div>
+        <div>inputKey length: {inputKey.trim().length}</div>
+        <div>saving: {String(saving)}</div>
+        <div>saveError: {saveError || '(无)'}</div>
+        <div>testResult: {testResult || '(无)'}</div>
+        <div>localStorage: {(() => { try { const t='_t'; localStorage.setItem(t,t); localStorage.removeItem(t); return 'OK'; } catch { return 'BROKEN'; } })()}</div>
+        <div>screen: {screen?.width || '?'}x{screen?.height || '?'}</div>
+      </div>
+
       {/* ═══════ API 配置 ═══════ */}
       <div style={sectionStyle}>
         <h3 style={sectionTitleStyle}>🔑 API 配置</h3>
