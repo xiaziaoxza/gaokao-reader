@@ -1,8 +1,13 @@
 // Audio download + IndexedDB cache using Youdao TTS
+// Dev: proxy through Vite to avoid CORS. Prod (APK): direct URL (WebView handles CORS).
+const TTS_DIRECT = 'https://dict.youdao.com/dictvoice?audio={}&type=0';
+const TTS_PROXIED = '/tts/{}';
+const TTS_API = import.meta.env.DEV ? TTS_PROXIED : TTS_DIRECT;
+
 const DB_NAME = 'gaokao-audio';
 const DB_VERSION = 1;
 const STORE = 'audio';
-const TTS_API = 'https://dict.youdao.com/dictvoice?audio={}&type=0';
+const PREFETCH_KEY = 'gaokao_prefetched_banks';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -39,7 +44,19 @@ async function cacheAudio(word: string, blob: Blob): Promise<void> {
     const db = await getDB();
     const tx = db.transaction(STORE, 'readwrite');
     tx.objectStore(STORE).put(blob, word.toLowerCase());
+    return new Promise((resolve) => { tx.oncomplete = () => resolve(); });
   } catch { /* ignore cache failures */ }
+}
+
+async function fetchAudioBlob(word: string): Promise<Blob> {
+  const url = TTS_API.replace('{}', encodeURIComponent(word));
+  const resp = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const blob = await resp.blob();
+  if (blob.size < 1000) throw new Error('Audio too small');
+  return blob;
 }
 
 export async function downloadAudio(
@@ -54,15 +71,7 @@ export async function downloadAudio(
   }
 
   // Download from Youdao
-  const url = TTS_API.replace('{}', encodeURIComponent(word));
-  const resp = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-  });
-
-  if (!resp.ok) throw new Error(`Audio download failed for: ${word}`);
-
-  const blob = await resp.blob();
-  if (blob.size < 1000) throw new Error(`Audio too small for: ${word}`);
+  const blob = await fetchAudioBlob(word);
 
   // Cache in background
   cacheAudio(word, blob);
@@ -96,4 +105,55 @@ export async function downloadAudioBatch(
   }
 
   return results;
+}
+
+/* ── Bank-level audio prefetch ── */
+
+export function getPrefetchedBanks(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PREFETCH_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch { return new Set(); }
+}
+
+function markBankPrefetched(bankId: string): void {
+  try {
+    const banks = getPrefetchedBanks();
+    banks.add(bankId);
+    localStorage.setItem(PREFETCH_KEY, JSON.stringify([...banks]));
+  } catch { /* ignore */ }
+}
+
+export async function prefetchBankAudio(
+  bankId: string,
+  words: string[],
+  onProgress?: (current: number, total: number, word: string) => void
+): Promise<{ success: number; failed: number }> {
+  const unique = [...new Set(words.map(w => w.toLowerCase()))];
+  let success = 0;
+  let failed = 0;
+
+  for (let i = 0; i < unique.length; i++) {
+    const word = unique[i];
+    onProgress?.(i + 1, unique.length, word);
+
+    // Already cached — count as success
+    const cached = await getCachedAudio(word);
+    if (cached) { success++; continue; }
+
+    try {
+      const blob = await fetchAudioBlob(word);
+      await cacheAudio(word, blob);
+      success++;
+    } catch {
+      failed++;
+    }
+  }
+
+  // Mark bank as prefetched if most words succeeded
+  if (unique.length > 0 && failed <= unique.length * 0.2) {
+    markBankPrefetched(bankId);
+  }
+
+  return { success, failed };
 }

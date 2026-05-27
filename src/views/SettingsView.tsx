@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useWordbankStore } from '../stores/wordbankStore';
+import { getPrefetchedBanks } from '../services/audio';
 import { ColorPicker } from '../components/ColorPicker';
 import { PALETTE } from '../utils/colors';
 
@@ -29,7 +30,7 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
   const [testResult, setTestResult] = useState('');
 
   /* ── Word banks ── */
-  const { banks, loaded: wbLoaded, loadBanks, addDownloadedBank, removeBank, toggleBank, setBankColor } = useWordbankStore();
+  const { banks, loaded: wbLoaded, audioProgress, loadBanks, addDownloadedBank, removeBank, toggleBank, setBankColor } = useWordbankStore();
   const [dlUrl, setDlUrl] = useState('');
   const [dlStatus, setDlStatus] = useState('');
 
@@ -274,11 +275,30 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
                   background: '#f5f0eb',
                 }}>
                   {bank.source === 'builtin' ? '内置' : '已下载'} · {bank.wordCount}词
+                  {audioProgress?.bankId === bank.id
+                    ? ` · 🎵${audioProgress.current}/${audioProgress.total}`
+                    : getPrefetchedBanks().has(bank.id)
+                      ? ' · ✅语音'
+                      : ''}
                 </span>
               </div>
               <div style={{ fontSize: '0.7rem', color: '#8b7e6a', marginTop: 2 }}>
                 {bank.description}
               </div>
+              {/* Audio prefetch progress */}
+              {audioProgress?.bankId === bank.id && (
+                <div style={{
+                  marginTop: 6, height: 4, borderRadius: 2,
+                  background: '#e8e0d5', overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%', borderRadius: 2,
+                    background: '#b87333',
+                    width: `${Math.round((audioProgress.current / audioProgress.total) * 100)}%`,
+                    transition: 'width 0.3s',
+                  }} />
+                </div>
+              )}
             </div>
 
             {/* Color picker */}

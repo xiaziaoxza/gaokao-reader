@@ -1,4 +1,6 @@
 import React, { useRef, useState, useCallback } from 'react';
+import { getCachedAudio } from '../services/audio';
+import { downloadAudio } from '../services/audio';
 
 interface Props {
   word: string;
@@ -14,30 +16,83 @@ export const VocabWord: React.FC<Props> = ({ word, translation, color, bg, audio
   const [speaking, setSpeaking] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  const handleSpeak = useCallback((e: React.MouseEvent) => {
+  const handleSpeak = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Try pre-downloaded audio URL first
+    setSpeaking(true);
+
+    const playBlob = async (blob: Blob) => {
+      const url = URL.createObjectURL(blob);
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      const a = new Audio(url);
+      audioRef.current = a;
+      a.onended = () => { setSpeaking(false); URL.revokeObjectURL(url); };
+      a.onerror = () => { setSpeaking(false); URL.revokeObjectURL(url); };
+      try {
+        await a.play();
+      } catch {
+        setSpeaking(false);
+        URL.revokeObjectURL(url);
+      }
+    };
+
+    // 1) Pre-populated audioUrl from article store (blob URL — fastest)
     if (audioUrl) {
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current.currentTime = 0;
       }
       const a = new Audio(audioUrl);
       audioRef.current = a;
-      setSpeaking(true);
+      a.onended = () => setSpeaking(false);
+      a.onerror = async () => {
+        // blob URL may be stale, try IndexedDB cache
+        const cached = await getCachedAudio(word);
+        if (cached) { await playBlob(cached); return; }
+        setSpeaking(false);
+      };
+      try {
+        await a.play();
+        return;
+      } catch {
+        // blob URL failed, try IndexedDB
+        const cached = await getCachedAudio(word);
+        if (cached) { await playBlob(cached); return; }
+      }
+    }
+
+    // 2) IndexedDB cache (from bank prefetch or previous downloads)
+    const cached = await getCachedAudio(word);
+    if (cached) {
+      await playBlob(cached);
+      return;
+    }
+
+    // 3) Download on-the-fly (through proxy in dev, direct in APK)
+    try {
+      const url = await downloadAudio(word);
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      const a = new Audio(url);
+      audioRef.current = a;
       a.onended = () => setSpeaking(false);
       a.onerror = () => setSpeaking(false);
-      a.play().catch(() => setSpeaking(false));
-    } else if ('speechSynthesis' in window) {
-      // Fallback to built-in speech synthesis
+      await a.play();
+      return;
+    } catch { /* download failed */ }
+
+    // 4) Last resort: Web Speech API
+    if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(word);
       u.lang = 'en-US';
       u.rate = 0.8;
-      setSpeaking(true);
       u.onend = () => setSpeaking(false);
       u.onerror = () => setSpeaking(false);
       window.speechSynthesis.speak(u);
+    } else {
+      setSpeaking(false);
     }
   }, [audioUrl, word]);
 
@@ -46,7 +101,6 @@ export const VocabWord: React.FC<Props> = ({ word, translation, color, bg, audio
     setTipVisible(v => !v);
   }, []);
 
-  // Close tooltip on outside click
   const tipRef = useRef<HTMLSpanElement>(null);
 
   return (
@@ -57,7 +111,6 @@ export const VocabWord: React.FC<Props> = ({ word, translation, color, bg, audio
     }}>
       {word}
 
-      {/* Gap row sitting in the line spacing below the word */}
       <span style={{
         position: 'absolute', top: '100%', left: '50%',
         transform: 'translateX(-50%)',
@@ -65,7 +118,6 @@ export const VocabWord: React.FC<Props> = ({ word, translation, color, bg, audio
         alignItems: 'center', gap: 5,
         zIndex: 2, whiteSpace: 'nowrap', pointerEvents: 'auto',
       }}>
-        {/* Translation box □ */}
         <span
           onClick={handleBox}
           ref={tipRef}
@@ -78,7 +130,6 @@ export const VocabWord: React.FC<Props> = ({ word, translation, color, bg, audio
           }}
         >
           □
-          {/* Tooltip popup */}
           {tipVisible && (
             <span style={{
               position: 'absolute', bottom: 'calc(100% + 4px)', left: '50%',
@@ -102,7 +153,6 @@ export const VocabWord: React.FC<Props> = ({ word, translation, color, bg, audio
           )}
         </span>
 
-        {/* Speak button 🔊 */}
         <span
           onClick={handleSpeak}
           title="点击朗读"

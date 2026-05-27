@@ -1,10 +1,18 @@
 import { create } from 'zustand';
 import { WordBank, loadBuiltinBanks, loadCachedBanks, saveBanksToCache, saveBankStates, loadBankStates, downloadBank as dlBank } from '../services/wordbank';
+import { prefetchBankAudio, getPrefetchedBanks } from '../services/audio';
 import { PALETTE } from '../utils/colors';
+
+export interface AudioProgress {
+  bankId: string;
+  current: number;
+  total: number;
+}
 
 interface WordbankState {
   banks: WordBank[];
   loaded: boolean;
+  audioProgress: AudioProgress | null;
 
   loadBanks: () => Promise<void>;
   addDownloadedBank: (url: string) => Promise<void>;
@@ -16,9 +24,9 @@ interface WordbankState {
 export const useWordbankStore = create<WordbankState>((set, get) => ({
   banks: [],
   loaded: false,
+  audioProgress: null,
 
   loadBanks: async () => {
-    // Load builtin + cached downloaded banks
     const [builtin, cached] = await Promise.all([
       loadBuiltinBanks(),
       loadCachedBanks(),
@@ -32,14 +40,42 @@ export const useWordbankStore = create<WordbankState>((set, get) => ({
       return b;
     });
     set({ banks: withStates, loaded: true });
+
+    // Background audio prefetch for banks not yet downloaded
+    const prefetched = getPrefetchedBanks();
+    for (const bank of withStates) {
+      if (!prefetched.has(bank.id)) {
+        const words = Object.keys(bank.words);
+        if (words.length === 0) continue;
+        set({ audioProgress: { bankId: bank.id, current: 0, total: words.length } });
+        try {
+          await prefetchBankAudio(bank.id, words, (current, total) => {
+            set({ audioProgress: { bankId: bank.id, current, total } });
+          });
+        } catch { /* prefetch is best-effort */ }
+        set({ audioProgress: null });
+      }
+    }
   },
 
   addDownloadedBank: async (url: string) => {
     const bank = await dlBank(url);
     const banks = [...get().banks, bank];
     set({ banks });
-    // Persist downloaded banks
     await saveBanksToCache(banks);
+
+    // Background audio prefetch for new bank
+    const prefetched = getPrefetchedBanks();
+    if (!prefetched.has(bank.id)) {
+      const words = Object.keys(bank.words);
+      set({ audioProgress: { bankId: bank.id, current: 0, total: words.length } });
+      try {
+        await prefetchBankAudio(bank.id, words, (current, total) => {
+          set({ audioProgress: { bankId: bank.id, current, total } });
+        });
+      } catch { /* best-effort */ }
+      set({ audioProgress: null });
+    }
   },
 
   removeBank: (id: string) => {
@@ -53,7 +89,6 @@ export const useWordbankStore = create<WordbankState>((set, get) => ({
       b.id === id ? { ...b, enabled: !b.enabled } : b
     );
     set({ banks });
-    // Persist enabled/disabled state for ALL banks
     saveBankStates(banks);
     if (banks.find(b => b.id === id && b.source === 'downloaded')) {
       saveBanksToCache(banks);
