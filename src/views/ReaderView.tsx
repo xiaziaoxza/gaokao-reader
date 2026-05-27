@@ -4,7 +4,7 @@ import { useWordbankStore } from '../stores/wordbankStore';
 import { ArticleRenderer } from '../components/ArticleRenderer';
 import { TranslationToggle } from '../components/TranslationToggle';
 import { matchVocab } from '../services/vocab';
-import { synthesizeLongText } from '../services/edgeTTS';
+import { synthesizeArticle } from '../services/baiduTTS';
 
 interface Props {
   onBack: () => void;
@@ -52,9 +52,8 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
     setNarrateProgress('正在合成语音…');
 
     try {
-      const blob = await synthesizeLongText(
+      const blob = await synthesizeArticle(
         articleText,
-        'en-US-female',
         (current, total) => {
           const pct = Math.round((current / total) * 90);
           setNarrateProgress(`合成中 ${pct}% (${current}/${total})`);
