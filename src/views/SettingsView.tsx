@@ -216,10 +216,9 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
         )}
 
         {/* Test Connection */}
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e8e0d5' }}>
+        <form onSubmit={handleTestConnection} style={{ margin: 0, marginTop: 12, paddingTop: 12, borderTop: '1px solid #e8e0d5' }}>
           <button
-            type="button"
-            onClick={() => handleTestConnection()}
+            type="submit"
             disabled={testing}
             style={{
               padding: '6px 16px', border: '1px solid #3498db',
@@ -236,7 +235,7 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
               {testResult}
             </div>
           )}
-        </div>
+        </form>
       </div>
 
       {/* ═══════ 词库管理 ═══════ */}

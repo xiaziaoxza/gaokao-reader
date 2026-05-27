@@ -230,13 +230,12 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
           />
         </div>
 
-        {/* Main input */}
-        <div style={{ display: 'flex', gap: 8 }}>
+        {/* Main input — form for reliable mobile WebView submit */}
+        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} style={{ display: 'flex', gap: 8, margin: 0 }}>
           <input
             type="text"
             value={input}
             onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
             placeholder="描述你想要的文章…"
             style={{
               flex: 1, padding: '10px 14px',
@@ -245,7 +244,7 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
             }}
           />
           <button
-            onClick={handleSend}
+            type="submit"
             disabled={sending || !input.trim()}
             style={{
               padding: '10px 20px', border: 'none', borderRadius: 10,
@@ -256,7 +255,7 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
           >
             发送
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );
