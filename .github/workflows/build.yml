@@ -82,7 +82,7 @@ jobs:
 
       - name: Build Electron EXE
         working-directory: electron
-        run: npm run electron:make
+        run: npm run electron:make-ci
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
