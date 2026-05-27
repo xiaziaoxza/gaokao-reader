@@ -1,8 +1,7 @@
 // Audio download + IndexedDB cache using Youdao TTS
-// Dev: proxy through Vite to avoid CORS. Prod (APK): direct URL (WebView handles CORS).
+// Dev: Vite proxy bypasses CORS. APK: CapacitorHttp native request bypasses CORS.
 const TTS_DIRECT = 'https://dict.youdao.com/dictvoice?audio={}&type=0';
 const TTS_PROXIED = '/tts/{}';
-const TTS_API = import.meta.env.DEV ? TTS_PROXIED : TTS_DIRECT;
 
 const DB_NAME = 'gaokao-audio';
 const DB_VERSION = 1;
@@ -49,14 +48,54 @@ async function cacheAudio(word: string, blob: Blob): Promise<void> {
 }
 
 async function fetchAudioBlob(word: string): Promise<Blob> {
-  const url = TTS_API.replace('{}', encodeURIComponent(word));
-  const resp = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-  });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const blob = await resp.blob();
-  if (blob.size < 1000) throw new Error('Audio too small');
-  return blob;
+  const youdaoUrl = TTS_DIRECT.replace('{}', encodeURIComponent(word));
+
+  if (import.meta.env.DEV) {
+    // Dev: use Vite proxy to avoid CORS
+    const proxyUrl = TTS_PROXIED.replace('{}', encodeURIComponent(word));
+    const resp = await fetch(proxyUrl);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const blob = await resp.blob();
+    if (blob.size < 1000) throw new Error('Audio too small');
+    return blob;
+  }
+
+  // APK: use Capacitor native HTTP to bypass WebView CORS
+  try {
+    const { CapacitorHttp } = await import('@capacitor/core');
+    const resp = await CapacitorHttp.get({
+      url: youdaoUrl,
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      responseType: 'blob',
+    });
+
+    if (resp.status < 200 || resp.status >= 300) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+
+    // Native may return base64 string; convert to Blob if needed
+    if (resp.data instanceof Blob) {
+      if (resp.data.size < 1000) throw new Error('Audio too small');
+      return resp.data;
+    }
+
+    // Response is base64 string from native layer
+    const binary = atob(resp.data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: 'audio/mpeg' });
+    if (blob.size < 1000) throw new Error('Audio too small');
+    return blob;
+  } catch (e) {
+    // Fallback to regular fetch if CapacitorHttp fails
+    const resp = await fetch(youdaoUrl);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const blob = await resp.blob();
+    if (blob.size < 1000) throw new Error('Audio too small');
+    return blob;
+  }
 }
 
 export async function downloadAudio(
