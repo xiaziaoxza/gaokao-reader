@@ -10,14 +10,15 @@ interface Props {
 }
 
 export const ArticleRenderer: React.FC<Props> = ({ text, matchedWords, audioUrls, showTranslation }) => {
-  if (!text || matchedWords.length === 0) {
-    // No matches: render plain text paragraphs
+  const paragraphs = text.split('\n').filter(p => p.trim());
+
+  if (matchedWords.length === 0) {
     return (
       <>
-        {text.split('\n').filter(p => p.trim()).map((para, i) => (
+        {paragraphs.map((para, i) => (
           <p key={i} style={{
             marginBottom: '1.3rem', textAlign: 'justify', textIndent: '2em',
-            lineHeight: '1cm',
+            lineHeight: 1.9,
           }}>
             {para}
           </p>
@@ -26,46 +27,36 @@ export const ArticleRenderer: React.FC<Props> = ({ text, matchedWords, audioUrls
     );
   }
 
-  // Build a map: character position → matched word info
-  // Sort matched words by their position in text
-  const sorted = [...matchedWords].sort((a, b) => text.indexOf(a.word) - text.indexOf(b.word));
-
-  // Build segments
-  const segments: Array<{ type: 'text' | 'vocab'; content: string; match?: MatchedWord }> = [];
-  let cursor = 0;
-
-  for (const mw of sorted) {
-    const idx = text.indexOf(mw.word, cursor);
-    if (idx === -1) continue;
-
-    // Text before this match
-    if (idx > cursor) {
-      segments.push({ type: 'text', content: text.slice(cursor, idx) });
+  // Compute each paragraph's range in the full article text
+  // This lets us assign matches to the correct paragraph using start/end positions
+  const paraRanges: Array<{ para: string; offset: number; end: number }> = [];
+  let searchPos = 0;
+  for (const para of paragraphs) {
+    const idx = text.indexOf(para, searchPos);
+    if (idx >= 0) {
+      paraRanges.push({ para, offset: idx, end: idx + para.length });
+      searchPos = idx + para.length;
+    } else {
+      // fallback
+      paraRanges.push({ para, offset: searchPos, end: searchPos + para.length });
+      searchPos += para.length + 1;
     }
-
-    // The matched word
-    segments.push({ type: 'vocab', content: mw.word, match: mw });
-    cursor = idx + mw.word.length;
   }
 
-  // Remaining text
-  if (cursor < text.length) {
-    segments.push({ type: 'text', content: text.slice(cursor) });
-  }
-
-  // Group segments into paragraphs (split on double newline or single newline)
-  // Just render all segments inline, preserving paragraph structure from original text
   return (
     <div>
-      {text.split('\n').filter(p => p.trim()).map((para, pIdx) => {
-        // Find which segments belong to this paragraph
-        // Use simple approach: render each paragraph by scanning its text for matches
+      {paraRanges.map((pr, pIdx) => {
+        // Matches whose start position falls within this paragraph
+        const paraMatches = matchedWords.filter(
+          m => m.start >= pr.offset && m.start < pr.end
+        );
+
         return (
           <p key={pIdx} style={{
             marginBottom: '1.3rem', textAlign: 'justify', textIndent: '2em',
             lineHeight: 1.9,
           }}>
-            {renderParagraph(para, sorted, audioUrls, showTranslation)}
+            {renderParagraph(pr.para, pr.offset, paraMatches, audioUrls, showTranslation)}
           </p>
         );
       })}
@@ -75,30 +66,32 @@ export const ArticleRenderer: React.FC<Props> = ({ text, matchedWords, audioUrls
 
 function renderParagraph(
   para: string,
+  paraOffset: number,
   matches: MatchedWord[],
   audioUrls: Map<string, string>,
   showTranslation: boolean
 ): React.ReactNode[] {
-  // Find all matches in this paragraph
-  const paraMatches = matches.filter(m => para.includes(m.word));
+  // Sort by position within this paragraph
+  const sorted = [...matches].sort((a, b) => a.start - b.start);
 
   const result: React.ReactNode[] = [];
-  let cursor = 0;
-
-  // Re-sort by position in this paragraph
-  const sorted = [...paraMatches].sort((a, b) => para.indexOf(a.word) - para.indexOf(b.word));
+  let cursor = 0; // cursor within this paragraph
 
   for (const mw of sorted) {
-    const idx = para.indexOf(mw.word, cursor);
-    if (idx === -1) continue;
+    const relStart = mw.start - paraOffset; // position within this paragraph
+    const relEnd = mw.end - paraOffset;
 
-    if (idx > cursor) {
-      result.push(<span key={`t-${cursor}`}>{para.slice(cursor, idx)}</span>);
+    if (relStart < cursor || relStart > para.length) continue;
+
+    // Text before this match
+    if (relStart > cursor) {
+      result.push(<span key={`t-${paraOffset}-${cursor}`}>{para.slice(cursor, relStart)}</span>);
     }
 
+    // The matched word
     result.push(
       <VocabWord
-        key={`vw-${idx}-${mw.word}`}
+        key={`vw-${mw.start}`}
         word={mw.word}
         translation={mw.translation}
         color={mw.color}
@@ -108,11 +101,12 @@ function renderParagraph(
       />
     );
 
-    cursor = idx + mw.word.length;
+    cursor = relEnd;
   }
 
+  // Remaining text
   if (cursor < para.length) {
-    result.push(<span key={`t-${cursor}`}>{para.slice(cursor)}</span>);
+    result.push(<span key={`t-${paraOffset}-${cursor}`}>{para.slice(cursor)}</span>);
   }
 
   return result;

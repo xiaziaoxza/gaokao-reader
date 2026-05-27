@@ -6,6 +6,8 @@ export interface MatchedWord {
   bankId: string;       // which word bank it belongs to
   color: string;        // CSS color
   bg: string;           // CSS background
+  start: number;        // character position in the article text
+  end: number;          // character position after the match
 }
 
 export interface WordBankForMatch {
@@ -15,69 +17,64 @@ export interface WordBankForMatch {
   words: Record<string, string>; // lowercased word → translation
 }
 
+interface RawMatch {
+  start: number;
+  end: number;
+  word: string;
+  lower: string;
+}
+
 /**
  * Match vocabulary words in article text against multiple word banks.
- * Longer matches take priority. Earlier banks (higher priority) take precedence.
+ * Uses actual regex positions — handles repeated words correctly.
  */
 export function matchVocab(
   articleText: string,
   banks: WordBankForMatch[]
 ): MatchedWord[] {
-  // Build a map: lowercased word → { translation, bankId, color, bg }
-  // Priority: first bank wins for overlapping words
+  // Build vocabulary map
   const vocabMap = new Map<string, { translation: string; bankId: string; color: string; bg: string }>();
 
   for (const bank of banks) {
     for (const [word, translation] of Object.entries(bank.words)) {
       const lower = word.toLowerCase();
       if (!vocabMap.has(lower)) {
-        vocabMap.set(lower, {
-          translation,
-          bankId: bank.id,
-          color: bank.color,
-          bg: bank.bg,
-        });
+        vocabMap.set(lower, { translation, bankId: bank.id, color: bank.color, bg: bank.bg });
       }
     }
   }
 
-  // Find all matches in the article
-  const matches: MatchedWord[] = [];
-  // Filter: exclude single-character words (e.g., "a", "I") which cause
-  // massive false positives since \b(a)\b matches every article in English
+  // Collect all candidate words, filter single-char
   const allWords = [...vocabMap.keys()]
     .filter(w => w.length >= 2)
     .sort((a, b) => b.length - a.length);
 
-  if (allWords.length === 0) return matches;
+  if (allWords.length === 0) return [];
 
-  const pattern = new RegExp(
-    '\\b(' + allWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')\\b',
-    'gi'
-  );
+  // Build regex
+  const escaped = allWords.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp('\\b(' + escaped.join('|') + ')\\b', 'gi');
 
-  // Track which positions are already matched (avoid overlaps)
-  const matchedRanges: Array<{ start: number; end: number }> = [];
-
-  let match: RegExpExecArray | null;
-  // Reset regex
-  pattern.lastIndex = 0;
-
-  // Collect all matches first
-  const rawMatches: Array<{ start: number; end: number; word: string; lower: string }> = [];
-  while ((match = pattern.exec(articleText)) !== null) {
+  // Collect ALL matches with actual positions
+  const rawMatches: RawMatch[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = pattern.exec(articleText)) !== null) {
     rawMatches.push({
-      start: match.index,
-      end: match.index + match[0].length,
-      word: match[0],
-      lower: match[0].toLowerCase(),
+      start: m.index,
+      end: m.index + m[0].length,
+      word: m[0],
+      lower: m[0].toLowerCase(),
     });
   }
 
-  // Filter overlapping matches (first/longest wins since regex alternation is length-sorted)
+  // Filter overlaps: for each position range, keep only the first match
+  // (regex alternation was already length-sorted, so first = longest)
+  const matchedRanges: Array<{ start: number; end: number }> = [];
+  const matches: MatchedWord[] = [];
+
   for (const rm of rawMatches) {
     const overlaps = matchedRanges.some(
-      r => (rm.start < r.end && rm.end > r.start)
+      r => rm.start < r.end && rm.end > r.start
     );
     if (overlaps) continue;
 
@@ -92,15 +89,13 @@ export function matchVocab(
       bankId: info.bankId,
       color: info.color,
       bg: info.bg,
+      start: rm.start,
+      end: rm.end,
     });
   }
 
   // Sort by position in text
-  matches.sort((a, b) => {
-    const aIdx = articleText.indexOf(a.word);
-    const bIdx = articleText.indexOf(b.word);
-    return aIdx - bIdx;
-  });
+  matches.sort((a, b) => a.start - b.start);
 
   return matches;
 }
