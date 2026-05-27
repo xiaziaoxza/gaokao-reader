@@ -15,6 +15,7 @@
     "zustand": "^4.5.0"
   },
   "devDependencies": {
+    "@capacitor-community/electron": "^5.0.1",
     "@capacitor/android": "^7.4.5",
     "@capacitor/cli": "^7.4.5",
     "@capacitor/core": "^7.4.5",
