@@ -75,7 +75,9 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
       // If article was generated, process it
       if (result.articleText) {
         setStatus('generating');
-        setArticle(result.articleText, result.articleTranslation || '');
+        // Extract title from first sentence
+        const title = result.articleText.split(/[.!\n]/)[0]?.trim().slice(0, 60) || '未命名文章';
+        setArticle(result.articleText, result.articleTranslation || '', title);
 
         // Match vocabulary
         const enabledBanks = banks.filter(b => b.enabled);
@@ -99,7 +101,6 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
         setStatus('ready');
 
         // Auto-save to history
-        const title = (result.articleText || '').split(/[.!\n]/)[0]?.trim().slice(0, 60) || '未命名文章';
         saveArticle({
           title,
           articleText: result.articleText || '',

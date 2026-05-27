@@ -1,16 +1,30 @@
-// Web Speech API — built into all Android WebViews (5.0+), no network required.
-// Used as the primary TTS engine for full-text narration.
+// Web Speech API — requires secure context (HTTPS). Android System WebView
+// exposes this when androidScheme is "https" in capacitor.config.json.
 
 let _speaking = false;
 let _utterance: SpeechSynthesisUtterance | null = null;
+let _timeout: ReturnType<typeof setTimeout> | null = null;
 
 export function isSpeechAvailable(): boolean {
-  return typeof window !== 'undefined' && 'speechSynthesis' in window;
+  if (typeof window === 'undefined') return false;
+  // Must have the API and be able to create an utterance
+  if (!('speechSynthesis' in window)) return false;
+  try {
+    new SpeechSynthesisUtterance('');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function stopSpeaking(): void {
+  if (_timeout) { clearTimeout(_timeout); _timeout = null; }
   if ('speechSynthesis' in window) {
     window.speechSynthesis.cancel();
+    // Chrome bug workaround: cancel can leave the synth in a paused state
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
+    }
   }
   _speaking = false;
   _utterance = null;
@@ -20,10 +34,6 @@ export function isSpeaking(): boolean {
   return _speaking;
 }
 
-/**
- * Speak text using the built-in speech synthesizer.
- * Returns a Promise that resolves when speaking completes or rejects on error.
- */
 export function speak(
   text: string,
   onBoundary?: (charIndex: number) => void,
@@ -36,61 +46,68 @@ export function speak(
   }
 
   stopSpeaking();
+  if (_timeout) { clearTimeout(_timeout); }
 
   const synth = window.speechSynthesis;
   const utterance = new SpeechSynthesisUtterance(text);
   _utterance = utterance;
 
-  // English voice
-  const voices = synth.getVoices();
-  const enVoice = voices.find(v => v.lang.startsWith('en-US') && v.name.includes('Female'))
-    || voices.find(v => v.lang.startsWith('en-US'))
-    || voices.find(v => v.lang.startsWith('en'))
-    || voices[0];
-
-  if (enVoice) utterance.voice = enVoice;
   utterance.lang = 'en-US';
   utterance.rate = 0.9;
   utterance.pitch = 1.0;
 
+  // Try to pick an English voice
+  const voices = synth.getVoices();
+  const enVoice = voices.find(v => v.lang.startsWith('en-US'))
+    || voices.find(v => v.lang.startsWith('en'))
+    || voices[0];
+  if (enVoice) utterance.voice = enVoice;
+
   _speaking = true;
 
+  // Safety timeout: if no event fires within 15s, report error
+  _timeout = setTimeout(() => {
+    if (_speaking) {
+      stopSpeaking();
+      // Chrome sometimes needs a second speak attempt to "wake up" the synth
+      try {
+        const retry = new SpeechSynthesisUtterance(text.slice(0, 50));
+        retry.lang = 'en-US';
+        retry.onend = () => onEnd?.();
+        retry.onerror = () => onError?.('语音引擎未响应，请检查系统TTS设置');
+        window.speechSynthesis.speak(retry);
+      } catch {
+        onError?.('语音引擎超时');
+      }
+    }
+  }, 15000);
+
   utterance.onboundary = (e) => {
+    if (_timeout) { clearTimeout(_timeout); _timeout = null; }
     onBoundary?.(e.charIndex);
   };
 
   utterance.onend = () => {
+    if (_timeout) { clearTimeout(_timeout); _timeout = null; }
     _speaking = false;
     _utterance = null;
     onEnd?.();
   };
 
   utterance.onerror = (e) => {
+    if (_timeout) { clearTimeout(_timeout); _timeout = null; }
     _speaking = false;
     _utterance = null;
-    onError?.(e.error || '语音播放出错');
+    // "not-allowed" usually means user hasn't interacted yet or context issue
+    const msg = e.error === 'not-allowed'
+      ? '语音权限未授予（请尝试先点击页面任意位置）'
+      : ('语音错误: ' + (e.error || 'unknown'));
+    onError?.(msg);
   };
 
-  // Load voices async if needed
-  if (voices.length === 0) {
-    synth.onvoiceschanged = () => {
-      const loadedVoices = synth.getVoices();
-      const v = loadedVoices.find(v => v.lang.startsWith('en-US') && v.name.includes('Female'))
-        || loadedVoices.find(v => v.lang.startsWith('en-US'))
-        || loadedVoices.find(v => v.lang.startsWith('en'))
-        || loadedVoices[0];
-      if (v) utterance.voice = v;
-      synth.speak(utterance);
-    };
-  } else {
+  // Chrome workaround: if synth has been idle for a while, it may need a
+  // micro-wakeup. Set a tiny timeout before speaking.
+  setTimeout(() => {
     synth.speak(utterance);
-  }
-}
-
-/**
- * Estimate reading duration in seconds
- */
-export function estimateDuration(text: string): number {
-  const words = text.split(/\s+/).length;
-  return Math.ceil(words / 150 * 60); // ~150 words per minute
+  }, 100);
 }

@@ -9,7 +9,8 @@
     "webContentsDebuggingEnabled": false
   },
   "server": {
-    "androidScheme": "http",
-    "cleartext": true
+    "androidScheme": "https",
+    "cleartext": true,
+    "allowNavigation": ["api.deepseek.com", "dict.youdao.com"]
   }
 }

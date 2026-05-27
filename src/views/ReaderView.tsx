@@ -4,7 +4,7 @@ import { useWordbankStore } from '../stores/wordbankStore';
 import { ArticleRenderer } from '../components/ArticleRenderer';
 import { TranslationToggle } from '../components/TranslationToggle';
 import { matchVocab } from '../services/vocab';
-import { speak, stopSpeaking, isSpeaking, isSpeechAvailable, estimateDuration } from '../services/speech';
+import { speak, stopSpeaking, isSpeaking, isSpeechAvailable } from '../services/speech';
 
 interface Props {
   onBack: () => void;
@@ -137,6 +137,37 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
           color: '#b87333', fontSize: '0.8rem',
         }}>
           {narrateProgress}
+        </div>
+      )}
+
+      {/* Bank vocabulary counts */}
+      {liveMatchedWords.length > 0 && (
+        <div style={{
+          display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center',
+          marginBottom: 12,
+        }}>
+          {(() => {
+            const enabledBanks = banks.filter(b => b.enabled);
+            const counts: Array<{ id: string; name: string; color: string; bg: string; count: number }> = [];
+            for (const b of enabledBanks) {
+              const cnt = liveMatchedWords.filter(m => m.bankId === b.id).length;
+              if (cnt > 0) counts.push({ id: b.id, name: b.name, color: b.color, bg: b.bg, count: cnt });
+            }
+            return counts.map(bc => (
+              <span key={bc.id} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '2px 8px', borderRadius: 10,
+                background: bc.bg, border: `1px solid ${bc.color}`,
+                fontSize: '0.7rem', color: bc.color, fontWeight: 600,
+              }}>
+                <span style={{
+                  display: 'inline-block', width: 8, height: 8,
+                  borderRadius: '50%', background: bc.color,
+                }} />
+                {bc.name}: {bc.count}词
+              </span>
+            ));
+          })()}
         </div>
       )}
 
