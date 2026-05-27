@@ -21,8 +21,9 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
   const { setStatus, setArticle, setMatchedWords, setAudioUrls, setProgress } = useArticleStore();
   const saveArticle = useArticleHistoryStore(s => s.save);
 
-  const [input, setInput] = useState('');
-  const [customWords, setCustomWords] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+  const customRef = useRef<HTMLInputElement>(null);
+  const [composing, setComposing] = useState(false); // IME composition guard
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,7 +31,9 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
   }, [messages]);
 
   const handleSend = async () => {
-    const text = input.trim();
+    const input = inputRef.current;
+    if (!input) return;
+    const text = input.value.trim();
     if (!text || sending) return;
     if (!apiKey) {
       addMessage({ role: 'assistant', content: '请先在设置页面配置 DeepSeek API Key。' });
@@ -39,14 +42,14 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
 
     // Build user message with optional custom words
     let userContent = text;
-    const words = customWords.trim();
+    const words = customRef.current?.value.trim() || '';
     if (words) {
       userContent += '\n\n[需要学习的单词: ' + words + ']';
     }
 
     addMessage({ role: 'user', content: text });
-    setInput('');
-    setCustomWords('');
+    input.value = '';
+    if (customRef.current) customRef.current.value = '';
     setSending(true);
 
     try {
@@ -108,13 +111,6 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
       addMessage({ role: 'assistant', content: '抱歉，出错了: ' + (e.message || '未知错误') });
     } finally {
       setSending(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
     }
   };
 
@@ -217,9 +213,9 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
         {/* Custom words input */}
         <div style={{ marginBottom: 8 }}>
           <input
+            ref={customRef}
             type="text"
-            value={customWords}
-            onChange={e => setCustomWords(e.target.value)}
+            defaultValue=""
             placeholder="添加要记忆的单词（逗号分隔），如: sustainable, ecosystem, biodiversity"
             style={{
               width: '100%', padding: '6px 10px',
@@ -230,12 +226,14 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
           />
         </div>
 
-        {/* Main input — form for reliable mobile WebView submit */}
-        <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} style={{ display: 'flex', gap: 8, margin: 0 }}>
+        {/* Main input — uncontrolled ref for IME compatibility + form submit */}
+        <form onSubmit={(e) => { e.preventDefault(); if (!composing) handleSend(); }} style={{ display: 'flex', gap: 8, margin: 0 }}>
           <input
+            ref={inputRef}
             type="text"
-            value={input}
-            onChange={e => setInput(e.target.value)}
+            defaultValue=""
+            onCompositionStart={() => setComposing(true)}
+            onCompositionEnd={() => setComposing(false)}
             placeholder="描述你想要的文章…"
             style={{
               flex: 1, padding: '10px 14px',
@@ -245,10 +243,10 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
           />
           <button
             type="submit"
-            disabled={sending || !input.trim()}
+            disabled={sending}
             style={{
               padding: '10px 20px', border: 'none', borderRadius: 10,
-              background: sending || !input.trim() ? '#d4b896' : '#b87333',
+              background: sending ? '#d4b896' : '#b87333',
               color: '#fff', cursor: sending ? 'default' : 'pointer',
               fontSize: '0.9rem', fontWeight: 600,
             }}
