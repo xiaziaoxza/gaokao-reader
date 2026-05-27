@@ -4,7 +4,9 @@ import { useArticleStore } from '../stores/articleStore';
 import { useWordbankStore } from '../stores/wordbankStore';
 import { ArticleRenderer } from '../components/ArticleRenderer';
 import { TranslationToggle } from '../components/TranslationToggle';
+import { NarrationPlayer } from '../components/NarrationPlayer';
 import { matchVocab } from '../services/vocab';
+import { getNarration } from '../services/audio';
 
 interface Props {
   onBack?: () => void;
@@ -16,6 +18,7 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
   const { banks } = useWordbankStore();
   const [selected, setSelected] = useState<SavedArticle | null>(null);
   const [showTranslation, setShowTranslation] = useState(false);
+  const [narrationBlob, setNarrationBlob] = useState<Blob | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -46,11 +49,14 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
     return counts;
   }, [rematchedWords, banks]);
 
-  const handleView = (article: SavedArticle) => {
+  const handleView = async (article: SavedArticle) => {
     setArticle(article.articleText, article.cnTranslation, article.title);
     setSelected(article);
-    // Scroll to top when entering detail view
+    setNarrationBlob(null);
     window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+    // Load narration if saved
+    const blob = await getNarration(article.id);
+    if (blob) setNarrationBlob(blob);
   };
 
   const handleBack = () => {
@@ -108,6 +114,9 @@ export const ArticleHistoryView: React.FC<Props> = ({ onBack }) => {
         }}>
           {selected.title}
         </h2>
+
+        {/* Narration player (if saved) */}
+        <NarrationPlayer audioBlob={narrationBlob} compact />
 
         {/* Bank vocabulary counts */}
         {bankWordCounts.length > 0 && (

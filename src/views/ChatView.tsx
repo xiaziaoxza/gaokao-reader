@@ -18,7 +18,7 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
   const { messages, sending, addMessage, setSending } = useChatStore();
   const { apiKey } = useSettingsStore();
   const { banks } = useWordbankStore();
-  const { setStatus, setArticle, setMatchedWords, setAudioUrls, setProgress } = useArticleStore();
+  const { setStatus, setArticle, setArticleId, setMatchedWords, setAudioUrls, setProgress } = useArticleStore();
   const saveArticle = useArticleHistoryStore(s => s.save);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -103,12 +103,13 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
         setStatus('ready');
 
         // Auto-save to history
-        saveArticle({
+        const saved = saveArticle({
           title,
           articleText: result.articleText || '',
           cnTranslation: result.articleTranslation || '',
           matchedWords: matched,
         });
+        setArticleId(saved.id);
       }
     } catch (e: any) {
       addMessage({ role: 'assistant', content: '抱歉，出错了: ' + (e.message || '未知错误') });

@@ -4,8 +4,9 @@ const TTS_DIRECT = 'https://dict.youdao.com/dictvoice?audio={}&type=0';
 const TTS_PROXIED = '/tts/{}';
 
 const DB_NAME = 'gaokao-audio';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE = 'audio';
+const NARRATION_STORE = 'narration';
 const PREFETCH_KEY = 'gaokao_prefetched_banks';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -18,6 +19,9 @@ function getDB(): Promise<IDBDatabase> {
       const db = req.result;
       if (!db.objectStoreNames.contains(STORE)) {
         db.createObjectStore(STORE);
+      }
+      if (!db.objectStoreNames.contains(NARRATION_STORE)) {
+        db.createObjectStore(NARRATION_STORE);
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -195,4 +199,40 @@ export async function prefetchBankAudio(
   }
 
   return { success, failed };
+}
+
+/* ── Full-article narration persistence ── */
+
+export async function saveNarration(articleId: string, blob: Blob): Promise<void> {
+  try {
+    const db = await getDB();
+    const tx = db.transaction(NARRATION_STORE, 'readwrite');
+    tx.objectStore(NARRATION_STORE).put(blob, articleId);
+    return new Promise((resolve) => { tx.oncomplete = () => resolve(); });
+  } catch { /* ignore */ }
+}
+
+export async function getNarration(articleId: string): Promise<Blob | null> {
+  try {
+    const db = await getDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(NARRATION_STORE, 'readonly');
+      const req = tx.objectStore(NARRATION_STORE).get(articleId);
+      req.onsuccess = () => resolve(req.result instanceof Blob ? req.result : null);
+      req.onerror = () => resolve(null);
+    });
+  } catch { return null; }
+}
+
+export async function deleteNarration(articleId: string): Promise<void> {
+  try {
+    const db = await getDB();
+    const tx = db.transaction(NARRATION_STORE, 'readwrite');
+    tx.objectStore(NARRATION_STORE).delete(articleId);
+  } catch { /* ignore */ }
+}
+
+export async function hasNarration(articleId: string): Promise<boolean> {
+  const blob = await getNarration(articleId);
+  return blob !== null;
 }

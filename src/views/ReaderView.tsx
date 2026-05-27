@@ -1,21 +1,22 @@
-import React, { useState, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useArticleStore } from '../stores/articleStore';
 import { useWordbankStore } from '../stores/wordbankStore';
 import { ArticleRenderer } from '../components/ArticleRenderer';
 import { TranslationToggle } from '../components/TranslationToggle';
+import { NarrationPlayer } from '../components/NarrationPlayer';
 import { matchVocab } from '../services/vocab';
 import { synthesizeArticle } from '../services/baiduTTS';
+import { saveNarration, getNarration } from '../services/audio';
 
 interface Props {
   onBack: () => void;
 }
 
 export const ReaderView: React.FC<Props> = ({ onBack }) => {
-  const { articleText, cnTranslation, title, matchedWords, audioUrls, status } = useArticleStore();
+  const { articleText, cnTranslation, title, currentArticleId, matchedWords, audioUrls, status } = useArticleStore();
   const { banks } = useWordbankStore();
   const [showTranslation, setShowTranslation] = useState(false);
 
-  // Re-match with current bank settings for dynamic color/state sync
   const liveMatchedWords = useMemo(() => {
     if (!articleText) return matchedWords;
     const enabledBanks = banks.filter(b => b.enabled);
@@ -26,66 +27,43 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
     return matchVocab(articleText, banksForMatch);
   }, [articleText, banks, matchedWords]);
 
-  const [narrating, setNarrating] = useState(false);
-  const [narrateProgress, setNarrateProgress] = useState('');
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Narration state
+  const [narrationBlob, setNarrationBlob] = useState<Blob | null>(null);
+  const [synthesizing, setSynthesizing] = useState(false);
+  const [synthProgress, setSynthProgress] = useState('');
 
-  const stopNarrate = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
-    }
-    setNarrating(false);
-    setNarrateProgress('');
-  }, []);
+  // Load saved narration on mount
+  useEffect(() => {
+    if (!currentArticleId) return;
+    let cancelled = false;
+    getNarration(currentArticleId).then(blob => {
+      if (!cancelled && blob) setNarrationBlob(blob);
+    });
+    return () => { cancelled = true; };
+  }, [currentArticleId]);
 
-  const handleNarrate = useCallback(async () => {
+  const handleSynthesize = useCallback(async () => {
     if (!articleText) return;
-
-    if (narrating) {
-      stopNarrate();
-      return;
-    }
-
-    setNarrating(true);
-    setNarrateProgress('正在合成语音…');
+    setSynthesizing(true);
+    setSynthProgress('正在合成语音…');
 
     try {
-      const blob = await synthesizeArticle(
-        articleText,
-        (current, total) => {
-          const pct = Math.round((current / total) * 90);
-          setNarrateProgress(`合成中 ${pct}% (${current}/${total})`);
-        }
-      );
+      const blob = await synthesizeArticle(articleText, (current, total) => {
+        setSynthProgress(`合成中 ${Math.round((current / total) * 90)}% (${current}/${total})`);
+      });
 
-      const url = URL.createObjectURL(blob);
-      const a = new Audio(url);
-      audioRef.current = a;
+      if (currentArticleId) {
+        try { await saveNarration(currentArticleId, blob); } catch { /* ok */ }
+      }
 
-      setNarrateProgress('正在朗读…');
-
-      a.onended = () => {
-        setNarrating(false);
-        setNarrateProgress('朗读完成');
-        URL.revokeObjectURL(url);
-        audioRef.current = null;
-      };
-
-      a.onerror = () => {
-        setNarrating(false);
-        setNarrateProgress('朗读失败: 音频播放错误');
-        URL.revokeObjectURL(url);
-        audioRef.current = null;
-      };
-
-      await a.play();
+      setNarrationBlob(blob);
+      setSynthesizing(false);
+      setSynthProgress('');
     } catch (err: any) {
-      setNarrating(false);
-      setNarrateProgress('朗读失败: ' + (err.message || '语音合成错误'));
+      setSynthesizing(false);
+      setSynthProgress('合成失败: ' + (err.message || '未知错误'));
     }
-  }, [articleText, narrating, stopNarrate]);
+  }, [articleText, currentArticleId]);
 
   if (status !== 'ready' || !articleText) {
     return (
@@ -134,35 +112,16 @@ export const ReaderView: React.FC<Props> = ({ onBack }) => {
           <span style={{ fontSize: '0.75rem', color: '#8b7e6a' }}>
             {liveMatchedWords.length} 词汇 · {audioUrls.size} 音频
           </span>
-
-          {/* Full narration button */}
-          <button
-            onClick={handleNarrate}
-            disabled={narrating}
-            style={{
-              padding: '4px 12px', border: '1px solid #b87333',
-              borderRadius: 16, background: narrating ? '#fef5ec' : '#fff',
-              cursor: narrating ? 'default' : 'pointer',
-              color: '#b87333', fontSize: '0.8rem',
-              display: 'flex', alignItems: 'center', gap: 4,
-            }}
-          >
-            {narrating ? '⏹' : '🔊'}
-            {narrating ? '停止朗读' : '全文朗读'}
-          </button>
         </div>
       </div>
 
-      {/* Narration progress */}
-      {narrateProgress && (
-        <div style={{
-          textAlign: 'center', padding: '6px 12px', marginBottom: 12,
-          background: '#fef5ec', borderRadius: 8,
-          color: '#b87333', fontSize: '0.8rem',
-        }}>
-          {narrateProgress}
-        </div>
-      )}
+      {/* Narration player / synthesize */}
+      <NarrationPlayer
+        audioBlob={narrationBlob}
+        onSynthesize={handleSynthesize}
+        synthesizing={synthesizing}
+        synthProgress={synthProgress}
+      />
 
       {/* Article title */}
       {title && (
