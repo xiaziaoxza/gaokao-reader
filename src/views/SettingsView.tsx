@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useWordbankStore } from '../stores/wordbankStore';
 import { ColorPicker } from '../components/ColorPicker';
@@ -21,7 +21,7 @@ const sectionTitleStyle: React.CSSProperties = {
 export const SettingsView: React.FC<Props> = ({ onBack }) => {
   /* ── API Key ── */
   const { apiKey, hasKey, keyLoaded, loadApiKey, setApiKey, clearApiKey } = useSettingsStore();
-  const [inputKey, setInputKey] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -44,17 +44,18 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
   }, [wbLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── API Key handlers ── */
-  const handleSave = async () => {
-    const key = inputKey.trim();
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const input = inputRef.current;
+    if (!input) return;
+    const key = input.value.trim();
     if (!key) return;
     setSaving(true);
     setSaveError('');
     try {
       await setApiKey(key);
-      // Verify it was actually persisted
-      const stored = localStorage.getItem('gk_api_key');
-      if (!stored) throw new Error('localStorage 写入失败，可能是存储空间不足或隐私模式');
-      setInputKey('');
+      input.value = '';
+      // No localStorage verification needed — memory store always works
     } catch (e: any) {
       setSaveError(e.message || '保存失败');
     } finally {
@@ -68,8 +69,10 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
     setTestResult('');
   };
 
-  const handleTestConnection = async () => {
-    const key = apiKey || inputKey.trim();
+  const handleTestConnection = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const inputKey = inputRef.current?.value.trim() || '';
+    const key = apiKey || inputKey;
     if (!key) {
       setTestResult('❌ 请先填写并保存 API Key');
       return;
@@ -132,7 +135,7 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
         <div>keyLoaded: {String(keyLoaded)}</div>
         <div>hasKey (store): {String(hasKey)}</div>
         <div>apiKey length: {apiKey.length}</div>
-        <div>inputKey length: {inputKey.trim().length}</div>
+        <div>input value length: {inputRef.current?.value?.trim().length ?? '?'}</div>
         <div>saving: {String(saving)}</div>
         <div>saveError: {saveError || '(无)'}</div>
         <div>testResult: {testResult || '(无)'}</div>
@@ -144,59 +147,63 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
       <div style={sectionStyle}>
         <h3 style={sectionTitleStyle}>🔑 API 配置</h3>
 
-        <label style={{ display: 'block', marginBottom: 6, color: '#5E4B66', fontWeight: 600 }}>
-          DeepSeek API Key
-        </label>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            type={showKey ? 'text' : 'password'}
-            value={inputKey}
-            onChange={e => setInputKey(e.target.value)}
-            placeholder={hasKey ? '•••••••• (已保存)' : 'sk-xxxxxxxx'}
-            style={{
-              flex: 1, padding: '8px 12px',
-              border: '1px solid #e8e0d5', borderRadius: 6,
-              fontSize: '0.9rem', outline: 'none',
-              background: '#fff',
-            }}
-          />
-          <button
-            onClick={() => setShowKey(!showKey)}
-            style={{
-              padding: '8px 12px', border: '1px solid #e8e0d5',
-              borderRadius: 6, background: '#fff', cursor: 'pointer',
-              fontSize: '0.8rem', color: '#8b7e6a',
-            }}
-          >
-            {showKey ? '隐藏' : '显示'}
-          </button>
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-          <button
-            onClick={handleSave}
-            disabled={!inputKey.trim() || saving}
-            style={{
-              padding: '8px 20px', border: 'none', borderRadius: 6,
-              background: saving ? '#d4b896' : '#b87333',
-              color: '#fff', cursor: saving ? 'default' : 'pointer',
-              fontSize: '0.85rem',
-            }}
-          >
-            {saving ? '保存中…' : (hasKey ? '更新 Key' : '保存')}
-          </button>
-          {hasKey && (
-            <button
-              onClick={handleClear}
+        <form onSubmit={handleSave} style={{ margin: 0 }}>
+          <label style={{ display: 'block', marginBottom: 6, color: '#5E4B66', fontWeight: 600 }}>
+            DeepSeek API Key
+          </label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              ref={inputRef}
+              type={showKey ? 'text' : 'password'}
+              defaultValue=""
+              placeholder={hasKey ? '•••••••• (已保存)' : 'sk-xxxxxxxx'}
               style={{
-                padding: '8px 20px', border: '1px solid #c0392b',
+                flex: 1, padding: '8px 12px',
+                border: '1px solid #e8e0d5', borderRadius: 6,
+                fontSize: '0.9rem', outline: 'none',
+                background: '#fff',
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey(!showKey)}
+              style={{
+                padding: '8px 12px', border: '1px solid #e8e0d5',
                 borderRadius: 6, background: '#fff', cursor: 'pointer',
-                color: '#c0392b', fontSize: '0.85rem',
+                fontSize: '0.8rem', color: '#8b7e6a',
               }}
             >
-              删除 Key
+              {showKey ? '隐藏' : '显示'}
             </button>
-          )}
-        </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button
+              type="submit"
+              disabled={saving}
+              style={{
+                padding: '8px 20px', border: 'none', borderRadius: 6,
+                background: saving ? '#d4b896' : '#b87333',
+                color: '#fff', cursor: saving ? 'default' : 'pointer',
+                fontSize: '0.85rem',
+              }}
+            >
+              {saving ? '保存中…' : (hasKey ? '更新 Key' : '保存')}
+            </button>
+            {hasKey && (
+              <button
+                type="button"
+                onClick={handleClear}
+                style={{
+                  padding: '8px 20px', border: '1px solid #c0392b',
+                  borderRadius: 6, background: '#fff', cursor: 'pointer',
+                  color: '#c0392b', fontSize: '0.85rem',
+                }}
+              >
+                删除 Key
+              </button>
+            )}
+          </div>
+        </form>
         {hasKey && (
           <div style={{ marginTop: 6, fontSize: '0.75rem', color: '#27ae60' }}>
             ✅ API Key 已保存（加密存储）
@@ -211,13 +218,14 @@ export const SettingsView: React.FC<Props> = ({ onBack }) => {
         {/* Test Connection */}
         <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #e8e0d5' }}>
           <button
-            onClick={handleTestConnection}
-            disabled={testing || (!hasKey && !inputKey.trim())}
+            type="button"
+            onClick={() => handleTestConnection()}
+            disabled={testing}
             style={{
               padding: '6px 16px', border: '1px solid #3498db',
               borderRadius: 6, background: '#fff',
               color: testing ? '#8b7e6a' : '#3498db',
-              cursor: (testing || (!hasKey && !inputKey.trim())) ? 'default' : 'pointer',
+              cursor: testing ? 'default' : 'pointer',
               fontSize: '0.8rem',
             }}
           >
