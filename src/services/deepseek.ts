@@ -29,7 +29,7 @@ Requirements:
 - The article should be coherent and engaging
 - IMPORTANT: Write as PLAIN TEXT. Do NOT use **, ##, or any markdown formatting. The app handles word highlighting visually.
 
-After the article, add a line with "---" only, then provide a complete Chinese translation of the entire article.`;
+After the article, add an empty line, then a line with "---" (three dashes only), then an empty line, then provide a complete Chinese translation.`;
 
   const resp = await fetch(`${API_BASE}/chat/completions`, {
     method: 'POST',
@@ -53,12 +53,15 @@ After the article, add a line with "---" only, then provide a complete Chinese t
   const data = await resp.json();
   const fullText = data.choices?.[0]?.message?.content || '';
 
-  // Parse article and translation
-  const parts = fullText.split('---');
-  // Strip any markdown formatting the model may have added
-  const rawArticle = parts[0]?.trim() || '';
+  // Parse article and translation — separator must be "\n---\n" (its own line)
+  const sepMatch = fullText.match(/\n---\n/);
+  const rawArticle = sepMatch
+    ? fullText.substring(0, sepMatch.index).trim()
+    : fullText.trim();
   const article = rawArticle.replace(/\*\*(.*?)\*\*/g, '$1').replace(/__([^_]+)__/g, '$1');
-  const translation = parts[1]?.trim() || '';
+  const translation = sepMatch
+    ? fullText.substring(sepMatch.index! + sepMatch[0].length).trim()
+    : '';
 
   if (!article) throw new Error('Failed to generate article');
 

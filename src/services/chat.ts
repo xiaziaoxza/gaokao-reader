@@ -9,7 +9,7 @@ Your capabilities:
 3. **Vocabulary**: The student may provide specific English words they want to learn. You MUST incorporate these words naturally into the article.
 
 When generating an article:
-- Output format: FIRST line is the article TITLE (a concise, engaging English title). Then the article body on subsequent lines, then "---" on a line by itself, then the complete Chinese translation.
+- Output format: FIRST line is the article TITLE. Then the article body. Then a line containing ONLY "---" (three dashes, nothing else). Then the complete Chinese translation. The "---" separator MUST be on its own line with empty lines before and after it.
 - Wrap the entire output (title + article + separator + translation) between \`\`\`article and \`\`\` markers so the app can detect it.
 - The article should be readable, natural English suitable for Gaokao reading comprehension.
 - Include all vocabulary words the student provided.
@@ -70,9 +70,14 @@ export async function sendChatMessage(params: ChatParams): Promise<ChatResult> {
 
   if (articleMatch) {
     const articleBlock = articleMatch[1];
-    const parts = articleBlock.split('---');
-    const articleSection = parts[0]?.trim() || '';
-    const translation = parts[1]?.trim() || '';
+    // Split on "---" on its own line (not em dashes in text)
+    const sepMatch = articleBlock.match(/\n---\n/);
+    const articleSection = sepMatch
+      ? articleBlock.substring(0, sepMatch.index).trim()
+      : articleBlock.trim();
+    const translation = sepMatch
+      ? articleBlock.substring(sepMatch.index! + sepMatch[0].length).trim()
+      : '';
 
     // First line is the title, rest is the article body
     const lines = articleSection.split('\n');
