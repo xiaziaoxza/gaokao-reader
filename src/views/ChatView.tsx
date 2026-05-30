@@ -216,33 +216,41 @@ export const ChatView: React.FC<Props> = ({ onViewArticle, onViewHistory }) => {
       }}>
         {/* Custom words input */}
         <div style={{ marginBottom: 8 }}>
-          <input
-            ref={customRef}
-            type="text"
+          <textarea
+            ref={customRef as any}
             defaultValue=""
             placeholder="添加要记忆的单词（逗号分隔），如: sustainable, ecosystem, biodiversity"
+            rows={2}
             style={{
               width: '100%', padding: '6px 10px',
               border: '1px solid #e8e0d5', borderRadius: 8,
               fontSize: '0.75rem', outline: 'none',
-              color: '#8b7e6a',
+              color: '#8b7e6a', resize: 'vertical',
+              fontFamily: 'inherit',
             }}
           />
         </div>
 
         {/* Main input — uncontrolled ref for IME compatibility + form submit */}
         <form onSubmit={(e) => { e.preventDefault(); if (!composing) handleSend(); }} style={{ display: 'flex', gap: 8, margin: 0 }}>
-          <input
-            ref={inputRef}
-            type="text"
+          <textarea
+            ref={inputRef as any}
             defaultValue=""
+            rows={2}
             onCompositionStart={() => setComposing(true)}
             onCompositionEnd={() => setComposing(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !composing) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
             placeholder="描述你想要的文章…"
             style={{
               flex: 1, padding: '10px 14px',
               border: '1px solid #e8e0d5', borderRadius: 10,
               fontSize: '0.9rem', outline: 'none',
+              resize: 'vertical', fontFamily: 'inherit',
             }}
           />
           <button
