@@ -3,6 +3,12 @@
   "appName": "Gaokao Reader",
   "webDir": "dist",
   "bundledWebRuntime": false,
+  "ios": {
+    "contentInset": "automatic",
+    "allowsLinkPreview": true,
+    "scrollEnabled": true,
+    "scheme": "GaokaoReader"
+  },
   "android": {
     "allowMixedContent": true,
     "captureInput": false,
@@ -10,6 +16,7 @@
   },
   "server": {
     "androidScheme": "https",
+    "iosScheme": "https",
     "cleartext": true,
     "allowNavigation": ["api.deepseek.com", "dict.youdao.com"]
   }
