@@ -1,0 +1,85 @@
+name: Build iOS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Add iOS platform
+        run: npx cap add ios
+
+      - name: Sync iOS
+        run: npx cap sync ios
+
+      - name: Build iOS app
+        run: |
+          cd ios/App
+          # Check if CocoaPods workspace exists, otherwise use xcodeproj
+          if [ -d "App.xcworkspace" ]; then
+            WORKSPACE="-workspace App.xcworkspace"
+          else
+            WORKSPACE="-project App.xcodeproj"
+          fi
+          xcodebuild $WORKSPACE \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            -derivedDataPath build \
+            clean build 2>&1 | tail -30
+
+      - name: Package IPA
+        run: |
+          APP_PATH=$(find ios/App/build -name "App.app" -type d 2>/dev/null | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Looking for .app in ios/App/build..."
+            find ios/App/build -name "*.app" -type d 2>/dev/null
+            echo "Build output tree:"
+            find ios/App/build -maxdepth 5 -type d 2>/dev/null | head -30
+            exit 1
+          fi
+          echo "Found app at: $APP_PATH"
+          mkdir -p Payload
+          cp -r "$APP_PATH" Payload/
+          zip -r gaokao-reader-ios.ipa Payload/
+          echo "IPA created: $(ls -lh gaokao-reader-ios.ipa)"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gaokao-reader-ios
+          path: gaokao-reader-ios.ipa
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ios-v${{ github.run_number }}
+          name: iOS Build #${{ github.run_number }}
+          files: gaokao-reader-ios.ipa
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
